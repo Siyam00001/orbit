@@ -47,10 +47,49 @@ export function money(days: Record<string, Day>, startCash: number, today: strin
   return { cash, runway: spent ? Math.max(0, Math.floor(cash / (spent / span))) : Infinity, earned: sum('earned'), spent: sum('spent') };
 }
 
+// ── weekly boss fight: job-hunt counters deal damage, a new boss every Monday ──
+export const BOSSES = [
+  ['👻', 'The Ghoster', 40], ['🤖', 'ATS Bot 3000', 50], ['🐌', '"We\'ll get back to you"', 40], ['🧛', 'Unpaid Trial Vampire', 45],
+  ['🦑', 'Recruiter Kraken', 60], ['🗿', 'Seen at 2pm', 45], ['🐉', 'The Hiring Freeze', 70], ['🎭', '"Exposure Pay" Client', 50],
+] as const;
+export const DAMAGE = { dms: 1, apps: 2, replies: 10 } as const;
+const damage = (d?: Day) => (d?.dms ?? 0) * DAMAGE.dms + (d?.apps ?? 0) * DAMAGE.apps + (d?.replies ?? 0) * DAMAGE.replies;
+export const mondayOf = (s: string) => addDays(s, -((new Date(s + 'T12:00').getDay() + 6) % 7));
+const bossFor = (monday: string) => {
+  const n = BOSSES.length, w = Math.floor(daysBetween('2026-01-05', monday) / 7); // 2026-01-05 is a Monday
+  return BOSSES[((w % n) + n) % n];
+};
+
+export function boss(days: Record<string, Day>, today: string) {
+  const monday = mondayOf(today), elapsed = daysBetween(monday, today);
+  const dmg = Array.from({ length: elapsed + 1 }, (_, i) => damage(days[addDays(monday, i)])).reduce((a, b) => a + b, 0);
+  const [emoji, name, hp] = bossFor(monday);
+  return { emoji, name, hp, dmg, left: Math.max(0, hp - dmg), dead: dmg >= hp, daysLeft: 6 - elapsed };
+}
+
+export function bossesBeaten(days: Record<string, Day>) {
+  const weeks: Record<string, number> = {};
+  for (const [k, d] of Object.entries(days)) { const m = mondayOf(k); weeks[m] = (weeks[m] ?? 0) + damage(d); }
+  return Object.entries(weeks).filter(([m, dmg]) => dmg >= bossFor(m)[2]).length;
+}
+
+// ── your world: a planet that mirrors the last 7 days ──
+export function world(days: Record<string, Day>, today: string, photos: number, veloLimit: number) {
+  const week = Array.from({ length: 7 }, (_, i) => doneCount(days[addDays(today, -i)]));
+  return {
+    health: week.reduce((a, b) => a + b, 0) / (7 * HABITS.length), // 0 barren … 1 lush
+    moons: Math.min(streak(days, today), 7),
+    trees: Math.min(photos, 14),
+    smog: (days[today]?.velo ?? 0) > veloLimit,
+    mood: days[today]?.mood ?? 0,
+  };
+}
+
 /** Everything you do earns XP; level n starts at (n-1)² × 100. */
 export function xp(days: Record<string, Day>, photos: number) {
   const total = Object.values(days).reduce((a, d) =>
-    a + doneCount(d) * 10 + (d.mood ? 2 : 0) + (d.dms ?? 0) + (d.apps ?? 0) * 2 + (d.replies ?? 0) * 10, 0) + photos * 3;
+    a + doneCount(d) * 10 + (d.mood ? 2 : 0) + (d.dms ?? 0) + (d.apps ?? 0) * 2 + (d.replies ?? 0) * 10, 0)
+    + photos * 3 + bossesBeaten(days) * 100;
   const level = Math.floor(Math.sqrt(total / 100)) + 1;
   const from = (level - 1) ** 2 * 100, to = level ** 2 * 100;
   return { total, level, title: TITLES[Math.min(level - 1, TITLES.length - 1)], pct: (total - from) / (to - from), toNext: to - total };

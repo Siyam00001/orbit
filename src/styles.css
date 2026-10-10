@@ -133,4 +133,59 @@ textarea { width: 100%; flex: 1; min-height: 200px; resize: vertical; }
 }
 .toast.bad { border-color: var(--bad); }
 .loading { display: grid; place-items: center; height: 80vh; font-size: 20px; color: var(--mute); }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.span-12 { grid-column: span 12; }
+kbd {
+  font: 600 11px/1 Consolas, monospace; color: var(--mute); background: var(--card2);
+  border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 3px 6px;
+}
+.habits .hlabel { flex: 1; }
+.habits kbd { opacity: .5; }
+.hint { text-align: center; margin-top: 22px; }
+.link { background: none; border: 0; color: var(--mute); font-size: 13px; }
+.link:hover { color: var(--text); }
+
+/* your world */
+.world { width: 100%; flex: 1; min-height: 200px; }
+.star { fill: #fff; animation: twinkle 3.5s ease-in-out infinite; }
+@media (prefers-color-scheme: light) { .star { fill: #7c3aed; } }
+@keyframes twinkle { 50% { opacity: .15; } }
+.orbit { transform-box: view-box; transform-origin: 150px 125px; animation: spin linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.moon { fill: #e2e8f0; filter: drop-shadow(0 0 3px #fff8); }
+.smog circle { fill: #6b7280; opacity: .55; animation: drift 6s ease-in-out infinite alternate; }
+@keyframes drift { to { transform: translateX(12px); opacity: .35; } }
+.victory-ring { fill: none; stroke: var(--warn); stroke-width: 3; opacity: .7; }
+.legend-line { text-align: center; font-size: 12px; margin-top: 6px; }
+
+/* boss fight */
+.boss { display: flex; gap: 16px; align-items: center; background: var(--card2); border-radius: 14px; padding: 14px; margin-bottom: 6px; }
+.boss-emoji { font-size: 54px; line-height: 1; animation: bob 2.2s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(-5px) rotate(-4deg); } }
+.boss.dead .boss-emoji { animation: none; filter: grayscale(1); }
+.boss-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.boss-info b { font-size: 18px; }
+.hp { height: 10px; margin: 6px 0 4px; }
+.hp i { background: linear-gradient(90deg, var(--bad), var(--warn)); }
+.crow kbd { opacity: .5; }
+
+/* garden timelapse */
+.reels { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.reels button { border-radius: 99px; font-size: 13px; padding: 5px 12px; }
+.overlay { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: #000c; backdrop-filter: blur(6px); }
+.film { margin: 0; max-width: min(90vw, 720px); }
+.film img { display: block; width: 100%; max-height: 75vh; object-fit: contain; border-radius: 14px; }
+.film figcaption { color: #fff; margin-top: 10px; text-align: center; }
+.keys { width: min(92vw, 380px); gap: 10px; }
+.keys p { display: flex; gap: 12px; align-items: center; }
+.keys kbd { min-width: 52px; text-align: center; opacity: 1; color: var(--text); }
+
+/* confetti */
+.confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 40; }
+.confetti i { position: absolute; top: -16px; width: 8px; height: 14px; border-radius: 2px; animation: fall 2s ease-in forwards; }
+@keyframes fall { to { transform: translate(var(--x), 105vh) rotate(600deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+  .star, .orbit, .smog circle, .boss-emoji { animation: none; }
+  .confetti { display: none; }
+}

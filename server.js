@@ -7,13 +7,14 @@ import { createServer as createVite } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const PORT = process.env.PORT || 4321;
-const PHOTOS = 'data/photos';
+const DATA = process.env.ORBIT_DATA || join(import.meta.dirname, 'data');
+const PHOTOS = join(DATA, 'photos');
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const IMAGE = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
 const DEFAULTS = { name: 'Siyam', city: 'Lahore', startCash: 0, veloLimit: 8, notes: '' };
 
 mkdirSync(PHOTOS, { recursive: true });
-const db = new DatabaseSync('data/orbit.db');
+const db = new DatabaseSync(join(DATA, 'orbit.db'));
 db.exec(`
   create table if not exists items (id integer primary key, kind text not null, data text not null, created text default (datetime('now')));
   create table if not exists days (date text primary key, data text not null);
@@ -59,6 +60,17 @@ app.patch('/api/days/:date', (req, res) => {
   res.json(JSON.parse(r.data));
 });
 
+// counters increment server-side, so rapid taps never overwrite each other
+const COUNTS = new Set(['velo', 'dms', 'apps', 'replies', 'spent', 'earned']);
+app.post('/api/days/:date/bump', (req, res) => {
+  const { key, by } = req.body ?? {};
+  if (!DATE.test(req.params.date) || !COUNTS.has(key) || !Number.isFinite(by)) return bad(res, 'bad date, key or amount');
+  const r = db.prepare(`insert into days (date, data) values (?1, json_object(?2, max(0, ?3)))
+    on conflict (date) do update set data = json_set(data, '$.' || ?2, max(0, coalesce(json_extract(data, '$.' || ?2), 0) + ?3))
+    returning data`).get(req.params.date, key, by);
+  res.json(JSON.parse(r.data));
+});
+
 app.get('/api/settings', (req, res) => res.json(settings()));
 app.patch('/api/settings', (req, res) => {
   if (!isObj(req.body)) return bad(res, 'body must be an object');
@@ -89,6 +101,6 @@ app.get('/api/weather', async (req, res) => {
 });
 
 // ponytail: Vite middleware serves the UI from this same process; add `vite build` + express.static if it's ever deployed
-const vite = await createVite({ plugins: [react()], server: { middlewareMode: true }, appType: 'spa' });
+const vite = await createVite({ root: import.meta.dirname, plugins: [react()], server: { middlewareMode: true }, appType: 'spa' });
 app.use(vite.middlewares);
 app.listen(PORT, '127.0.0.1', () => console.log(`🪐 Orbit running → http://localhost:${PORT}`));
