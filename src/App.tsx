@@ -1,19 +1,15 @@
-import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  HABITS, STAGES, addDays, daysBetween, doneCount, money, needsFollowUp, pkr, streak, thirst, xp, ymd,
-  type Day, type Item, type Settings,
+  COUNTERS, HABITS, addDays, daysBetween, doneCount, money, pkr, streak, weekTotal, xp, ymd,
+  type Count, type Day, type Item, type Settings,
 } from './logic.ts';
 
 type Weather = { city: string; temp: number; code: number; rain: number; hi: number; lo: number };
-type Data = { jobs: Item[]; money: Item[]; body: Item[]; plants: Item[]; days: Record<string, Day>; settings: Settings };
+type Data = { photos: Item[]; days: Record<string, Day>; settings: Settings };
 type Act = (fn: () => Promise<unknown>, msg?: string) => Promise<boolean>;
 type P = { d: Data; today: string; act: Act };
-type Field = [name: string, type: string, placeholder?: string, options?: readonly string[]];
 
-const KINDS = ['jobs', 'money', 'body', 'plants'] as const;
 const MOODS = ['😞', '😕', '😐', '🙂', '😄'];
-const WHERE = ['X', 'LinkedIn', 'Fiverr', 'Reddit', 'Product Hunt', 'Job board', 'Other'];
-const PLANT_EMOJI = ['🌿', '🌱', '🪴', '🌵', '🌹', '🌻', '🌼', '🍅', '🌶️', '🍋', '🌳'];
 const LINES = [
   'Small steps, every single day.', 'One good DM can change the whole month.', 'Water the plants. Water yourself too.',
   'You built a whole SaaS alone. You can do hard things.', 'Rough season, not a rough life.',
@@ -21,8 +17,11 @@ const LINES = [
 ];
 
 async function api<T = any>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  const raw = body instanceof Blob;
   const res = await fetch('/api' + path, {
-    method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
+    method,
+    headers: { 'content-type': raw ? body.type : 'application/json' },
+    body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
   });
   if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || `${res.status} ${res.statusText}`);
   return res.status === 204 ? (undefined as T) : res.json();
@@ -38,8 +37,8 @@ export default function App() {
   const today = ymd();
 
   const load = useCallback(async () => {
-    const [jobs, money, body, plants, days, settings] = await Promise.all([...KINDS.map(k => api(`/items/${k}`)), api('/days'), api('/settings')]);
-    setD({ jobs, money, body, plants, days, settings });
+    const [photos, days, settings] = await Promise.all([api('/photos'), api('/days'), api('/settings')]);
+    setD({ photos, days, settings });
   }, []);
   const flash = (text: string, bad = false) => { setToast({ text, bad }); setTimeout(() => setToast(null), 3000); };
   // every mutation: call API → reload → toast; errors surface instead of failing silently
@@ -51,7 +50,7 @@ export default function App() {
 
   if (!d) return <div className="loading">🪐 Loading…</div>;
   const p: P = { d, today, act };
-  const lv = xp(d.days, d.jobs, d.plants, d.body);
+  const lv = xp(d.days, d.photos.length);
   const hour = new Date().getHours();
   const greet = hour < 5 ? 'Up late' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
@@ -76,10 +75,9 @@ export default function App() {
       <Today {...p} />
       <Velo {...p} />
       <Money {...p} />
-      <Jobs {...p} />
-      <Garden {...p} wx={wx} />
-      <Body {...p} />
+      <Hunt {...p} />
       <Consistency {...p} />
+      <Garden {...p} />
       <Notes {...p} />
     </main>
     {toast && <div className={`toast ${toast.bad ? 'bad' : ''}`} role="status">{toast.text}</div>}
@@ -89,23 +87,12 @@ export default function App() {
 const Card = ({ title, extra, className = '', children }: { title: string; extra?: ReactNode; className?: string; children: ReactNode }) =>
   <section className={`card ${className}`}><div className="card-head"><h2>{title}</h2>{extra}</div>{children}</section>;
 
-const Del = ({ kind, id, act }: { kind: string; id: number; act: Act }) =>
-  <button className="del" aria-label="Delete" title="Delete" onClick={() => confirm('Delete this?') && act(() => api(`/items/${kind}/${id}`, 'DELETE'))}>×</button>;
-
-/** Uncontrolled add-form; placeholders containing "optional" aren't required. Resets only on success. */
-function QuickForm({ fields, today, onAdd }: { fields: Field[]; today: string; onAdd: (v: Record<string, string>) => Promise<boolean> }) {
-  return <form className="qf" onSubmit={e => {
-    e.preventDefault();
-    const f = e.currentTarget;
-    onAdd(Object.fromEntries(new FormData(f)) as Record<string, string>).then(ok => ok && f.reset());
-  }}>
-    {fields.map(([name, type, ph, opts]) => type === 'select'
-      ? <select key={name} name={name} aria-label={name}>{opts!.map(o => <option key={o}>{o}</option>)}</select>
-      : <input key={name} name={name} type={type} placeholder={ph} aria-label={ph ?? name} defaultValue={type === 'date' ? today : undefined}
-          required={!ph?.includes('optional')} {...(type === 'number' && { step: 'any', min: 0 })} />)}
-    <button className="primary">Add</button>
-  </form>;
-}
+const Stepper = ({ n, onStep, big, bad }: { n: number; onStep: (s: number) => void; big?: boolean; bad?: boolean }) =>
+  <div className={`stepper ${big ? 'big' : ''}`}>
+    <button onClick={() => onStep(-1)} aria-label="One less" disabled={n <= 0}>−</button>
+    <b className={bad ? 'bad' : ''}>{n}</b>
+    <button onClick={() => onStep(1)} aria-label="One more">+</button>
+  </div>;
 
 function Ring({ value, label }: { value: number; label: string }) {
   const r = 40, c = 2 * Math.PI * r;
@@ -115,6 +102,10 @@ function Ring({ value, label }: { value: number; label: string }) {
     <text x="50" y="57" textAnchor="middle">{label}</text>
   </svg>;
 }
+
+// shared by every counter: patch one field of today's row
+const bump = ({ d, today, act }: P, k: Count, by: number, msg?: string) =>
+  act(() => api(`/days/${today}`, 'PATCH', { [k]: Math.max(0, (d.days[today]?.[k] ?? 0) + by) }), msg);
 
 function Today({ d, today, act }: P) {
   const day = d.days[today], done = doneCount(day);
@@ -140,17 +131,12 @@ function Today({ d, today, act }: P) {
   </Card>;
 }
 
-function Velo({ d, today, act }: P) {
-  const n = d.days[today]?.velo ?? 0, limit = d.settings.veloLimit;
+function Velo(p: P) {
+  const { d, today } = p, n = d.days[today]?.velo ?? 0, limit = d.settings.veloLimit;
   const week = Array.from({ length: 7 }, (_, i) => { const k = addDays(today, i - 6); return [k, d.days[k]?.velo ?? 0] as const; });
   const max = Math.max(limit, 1, ...week.map(([, v]) => v));
-  const set = (v: number) => act(() => api(`/days/${today}`, 'PATCH', { velo: Math.max(0, v) }));
   return <Card title="Velo" className="span-3">
-    <div className="counter">
-      <button onClick={() => set(n - 1)} aria-label="One less">−</button>
-      <b className={n > limit ? 'bad' : ''}>{n}</b>
-      <button onClick={() => set(n + 1)} aria-label="One more">+</button>
-    </div>
+    <Stepper big n={n} bad={n > limit} onStep={s => bump(p, 'velo', s)} />
     <p className="mute center">{n > limit ? `${n - limit} over your limit of ${limit}` : `${limit - n} left of ${limit} today`}</p>
     <div className="bars">{week.map(([k, v]) =>
       <div key={k} title={`${k}: ${v}`}>
@@ -161,113 +147,42 @@ function Velo({ d, today, act }: P) {
   </Card>;
 }
 
-function Money({ d, today, act }: P) {
-  const m = money(d.money, d.settings.startCash, today);
+function Money(p: P) {
+  const { d, today } = p, m = money(d.days, d.settings.startCash, today), day = d.days[today];
   const tone = m.runway < 30 ? 'bad' : m.runway < 90 ? 'warn' : 'ok';
+  const other = (k: 'spent' | 'earned') => {
+    const v = Number(prompt(`${k === 'spent' ? 'Spent' : 'Earned'} how much? (use a minus to fix a mistake, e.g. -500)`));
+    if (v) bump(p, k, v);
+  };
+  const chips = (k: 'spent' | 'earned', amounts: number[]) => <div className="chips">
+    <span className="mute">{k === 'spent' ? 'Spent' : 'Earned'}</span>
+    {amounts.map(a => <button key={a} onClick={() => bump(p, k, a, k === 'earned' ? '💰 Money in!' : undefined)}>+{a.toLocaleString()}</button>)}
+    <button onClick={() => other(k)} aria-label={`Other ${k} amount`}>…</button>
+  </div>;
   return <Card title="Money" className="span-4">
     <div className="big">{pkr(m.cash)}</div>
-    <p className="mute">cash on hand{!d.settings.startCash && !d.money.length && ' — set your starting cash in ⚙️'}</p>
+    <p className="mute">cash on hand{!d.settings.startCash && ' — set your starting cash in ⚙️'}</p>
     <div className="stats">
       <div><b className={tone}>{m.runway === Infinity ? '∞' : m.runway}</b><small>days runway</small></div>
-      <div><b className="ok">+{pkr(m.income)}</b><small>in this month</small></div>
-      <div><b className="bad">−{pkr(m.expense)}</b><small>out this month</small></div>
+      <div><b>{pkr(day?.spent ?? 0)}</b><small>spent today</small></div>
+      <div><b className="ok">{pkr(m.earned)}</b><small>earned this month</small></div>
     </div>
-    <QuickForm today={today}
-      fields={[['type', 'select', undefined, ['Expense', 'Income']], ['amount', 'number', 'Amount'], ['note', 'text', 'What for (optional)'], ['date', 'date']]}
-      onAdd={v => act(() => api('/items/money', 'POST', v), v.type === 'Income' ? '💰 Money in! Nice.' : undefined)} />
-    <ul className="list">{d.money.slice(0, 5).map(e =>
-      <li key={e.id}>
-        <span className={e.type === 'Income' ? 'ok' : ''}>{e.type === 'Income' ? '+' : '−'}{pkr(+e.amount)}</span>
-        <span className="mute">{e.note || e.type} · {e.date.slice(5)}</span>
-        <Del kind="money" id={e.id} act={act} />
-      </li>)}
-    </ul>
+    {chips('spent', [100, 500, 1000])}
+    {chips('earned', [1000, 5000])}
   </Card>;
 }
 
-function Jobs({ d, today, act }: P) {
-  const stage = (j: Item, s: string) => act(() => api(`/items/jobs/${j.id}`, 'PATCH', { stage: s }),
-    s === 'Won' ? '🏆 Client won! +150 XP' : s === 'Call' ? '📞 Got a call — prep and crush it' : undefined);
-  const week = d.jobs.filter(j => daysBetween(j.date, today) < 7).length;
-  const passed = d.jobs.filter(j => j.stage === 'No').length;
-  return <Card title="Job pipeline" className="span-12" extra={<span className="mute">{week} reached out this week · {passed} passed</span>}>
-    <QuickForm today={today}
-      fields={[['who', 'text', 'Name / company'], ['where', 'select', undefined, WHERE], ['kind', 'select', undefined, ['DM', 'Application', 'Gig']], ['note', 'text', 'Note (optional)'], ['date', 'date']]}
-      onAdd={v => act(() => api('/items/jobs', 'POST', { ...v, stage: 'Sent' }))} />
-    <div className="kanban">{STAGES.slice(0, 4).map((s, i) => {
-      const list = d.jobs.filter(j => j.stage === s);
-      return <div key={s} className={`col s-${s}`}>
-        <h3>{s}<span>{list.length}</span></h3>
-        {list.map(j => <div key={j.id} className="job">
-          <div className="job-top"><b>{j.who}</b>{needsFollowUp(j, today) && <span className="pill warn">follow up</span>}</div>
-          <small className="mute">{j.kind} · {j.where} · {j.date.slice(5)}</small>
-          {j.note && <p>{j.note}</p>}
-          <div className="job-actions">
-            {i > 0 && <button onClick={() => stage(j, STAGES[i - 1])} aria-label="Move back">←</button>}
-            {i < 3 && <button onClick={() => stage(j, STAGES[i + 1])} aria-label="Move forward">→</button>}
-            <button onClick={() => stage(j, 'No')} title="They passed">pass</button>
-            <Del kind="jobs" id={j.id} act={act} />
-          </div>
-        </div>)}
-        {!list.length && <p className="empty">{['Send some DMs ✉️', 'Replies land here', 'Calls land here', 'Wins land here 🏆'][i]}</p>}
+function Hunt(p: P) {
+  const { d, today } = p;
+  return <Card title="Job hunt" className="span-5">
+    {COUNTERS.map(([k, icon, label]) => {
+      const n = d.days[today]?.[k] ?? 0;
+      return <div key={k} className="crow">
+        <span className="hicon">{icon}</span>
+        <span className="clabel">{label}<small className="mute">{weekTotal(d.days, k, today)} this week</small></span>
+        <Stepper n={n} onStep={s => bump(p, k, s, k === 'replies' && s > 0 ? '💬 A reply! Answer it fast.' : undefined)} />
       </div>;
-    })}</div>
-  </Card>;
-}
-
-function Garden({ d, today, act, wx }: P & { wx: Weather | null }) {
-  const rainy = (wx?.rain ?? 0) >= 60;
-  const plants = [...d.plants].sort((a, b) => thirst(b, today) - thirst(a, today));
-  const water = (p: Item) => act(() => api(`/items/plants/${p.id}`, 'PATCH', { lastWatered: today, waterCount: (+p.waterCount || 0) + 1 }), `💧 ${p.name} watered`);
-  const thirsty = plants.filter(p => thirst(p, today) >= 1).length;
-  return <Card title="Garden" className="span-7"
-    extra={<span className="mute">{thirsty ? `${thirsty} thirsty` : 'all happy'}{rainy && ` · 🌧️ ${wx!.rain}% rain today`}</span>}>
-    <div className="plants">
-      {plants.map(p => {
-        const t = thirst(p, today), skip = rainy && p.place === 'Outdoor', due = t >= 1 && !skip;
-        return <div key={p.id} className={`plant ${due ? 'thirsty' : ''}`}>
-          <div className="plant-emoji">{p.emoji}</div>
-          <b>{p.name}</b>
-          <small className="mute">{p.spot || p.place} · every {p.every}d</small>
-          <div className="bar thirst" title="thirst"><i style={{ width: `${Math.min(1, t) * 100}%` }} /></div>
-          <small className={due ? 'warn' : 'mute'}>{t >= 1 ? (skip ? 'rain will do it 🌧️' : 'needs water') : t >= 0.7 ? 'water soon' : 'happy'}</small>
-          <div className="plant-actions"><button onClick={() => water(p)}>💧 Water</button><Del kind="plants" id={p.id} act={act} /></div>
-        </div>;
-      })}
-      {!plants.length && <p className="empty">Add your first plant below 🌱</p>}
-    </div>
-    <QuickForm today={today}
-      fields={[['emoji', 'select', undefined, PLANT_EMOJI], ['name', 'text', 'Plant name'], ['place', 'select', undefined, ['Outdoor', 'Indoor']],
-        ['spot', 'text', 'Spot (optional)'], ['every', 'number', 'Water every N days'], ['lastWatered', 'date']]}
-      onAdd={v => act(() => api('/items/plants', 'POST', v), `🌱 ${v.name} added`)} />
-  </Card>;
-}
-
-function Spark({ values, goal }: { values: number[]; goal?: number }) {
-  if (values.length < 2) return null;
-  const all = goal ? [...values, goal] : values, lo = Math.min(...all), hi = Math.max(...all);
-  const y = (v: number) => 56 - ((v - lo) / (hi - lo || 1)) * 52;
-  return <svg className="spark" viewBox="0 0 300 60" preserveAspectRatio="none" aria-hidden="true">
-    {goal && <line x1="0" x2="300" y1={y(goal)} y2={y(goal)} className="goal" />}
-    <polyline points={values.map((v, i) => `${(i / (values.length - 1)) * 300},${y(v)}`).join(' ')} />
-  </svg>;
-}
-
-function Body({ d, today, act }: P) {
-  const pts = [...d.body].sort((a, b) => (a.date < b.date ? -1 : 1));
-  const w = pts.map(p => +p.weight), last = pts.at(-1), goal = +d.settings.goalWeight;
-  const change = w.length ? w[w.length - 1] - w[0] : 0;
-  return <Card title="Body" className="span-5" extra={last && goal ? <span className="mute">{Math.abs(+last.weight - goal).toFixed(1)} kg to goal</span> : undefined}>
-    {last
-      ? <div className="stats">
-          <div><b>{last.weight} kg</b><small>now</small></div>
-          <div><b className={change <= 0 ? 'ok' : 'bad'}>{change > 0 ? '+' : ''}{change.toFixed(1)}</b><small>kg since start</small></div>
-          <div><b>{last.waist ? `${last.waist} cm` : '—'}</b><small>waist</small></div>
-        </div>
-      : <p className="mute">Weigh in weekly — same time, after waking. Waist shrinking = abs loading.</p>}
-    <Spark values={w} goal={goal || undefined} />
-    <QuickForm today={today} fields={[['weight', 'number', 'Weight kg'], ['waist', 'number', 'Waist cm (optional)'], ['date', 'date']]}
-      onAdd={v => act(() => api('/items/body', 'POST', v), '📏 Logged')} />
+    })}
   </Card>;
 }
 
@@ -286,6 +201,31 @@ function Consistency({ d, today }: P) {
   </Card>;
 }
 
+function Garden({ d, today, act }: P) {
+  const [name, setName] = useState('');
+  const pick = useRef<HTMLInputElement>(null);
+  const upload = (f: File) => act(() => api(`/photos?name=${encodeURIComponent(name)}&date=${today}`, 'POST', f), '📸 Saved')
+    .then(ok => ok && setName(''));
+  return <Card title="Garden 🌱" className="span-7" extra={<span className="mute">{d.photos.length} photos</span>}>
+    <div className="snap">
+      <input value={name} onChange={e => setName(e.target.value)} placeholder="Name (optional)" aria-label="Photo name" />
+      <button className="primary" onClick={() => pick.current!.click()}>📸 Add photo</button>
+      <input ref={pick} type="file" accept="image/*" capture="environment" hidden
+        onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
+    </div>
+    <div className="photos">
+      {d.photos.map(ph => <figure key={ph.id}>
+        <a href={`/photos/${ph.file}`} target="_blank" rel="noreferrer"><img src={`/photos/${ph.file}`} alt={ph.name || 'Garden photo'} loading="lazy" /></a>
+        <figcaption>
+          <span>{ph.name}</span><small className="mute">{ph.date.slice(5)}</small>
+          <button className="del" aria-label="Delete photo" onClick={() => confirm('Delete this photo?') && act(() => api(`/photos/${ph.id}`, 'DELETE'))}>×</button>
+        </figcaption>
+      </figure>)}
+      {!d.photos.length && <p className="empty">Snap your plants — watch them grow over time 🌿</p>}
+    </div>
+  </Card>;
+}
+
 function Notes({ d, act }: P) {
   const [text, setText] = useState(d.settings.notes);
   return <Card title="Notes & goals" className="span-5" extra={text !== d.settings.notes ? <span className="mute">saves when you click away</span> : undefined}>
@@ -298,14 +238,12 @@ function SettingsPanel({ s, act, onSaved }: { s: Settings; act: Act; onSaved: ()
   return <form className="card settings" onSubmit={e => {
     e.preventDefault();
     const v = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
-    act(() => api('/settings', 'PATCH', { ...v, startCash: +v.startCash, veloLimit: +v.veloLimit, goalWeight: +v.goalWeight }), 'Settings saved')
-      .then(ok => ok && onSaved());
+    act(() => api('/settings', 'PATCH', { ...v, startCash: +v.startCash, veloLimit: +v.veloLimit }), 'Settings saved').then(ok => ok && onSaved());
   }}>
     <label>Name<input name="name" defaultValue={s.name} required /></label>
     <label>City (for weather)<input name="city" defaultValue={s.city} required /></label>
     <label>Cash when you started (PKR)<input name="startCash" type="number" step="any" defaultValue={s.startCash} /></label>
     <label>Velo daily limit<input name="veloLimit" type="number" min="0" defaultValue={s.veloLimit} /></label>
-    <label>Goal weight (kg)<input name="goalWeight" type="number" step="any" min="0" defaultValue={s.goalWeight} /></label>
     <button className="primary">Save</button>
   </form>;
 }

@@ -1,15 +1,18 @@
 import express from 'express';
-import { mkdirSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createServer as createVite } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const PORT = process.env.PORT || 4321;
-const KINDS = new Set(['jobs', 'money', 'body', 'plants']);
+const PHOTOS = 'data/photos';
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const DEFAULTS = { name: 'Siyam', city: 'Lahore', startCash: 0, veloLimit: 8, goalWeight: 0, notes: '' };
+const IMAGE = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+const DEFAULTS = { name: 'Siyam', city: 'Lahore', startCash: 0, veloLimit: 8, notes: '' };
 
-mkdirSync('data', { recursive: true });
+mkdirSync(PHOTOS, { recursive: true });
 const db = new DatabaseSync('data/orbit.db');
 db.exec(`
   create table if not exists items (id integer primary key, kind text not null, data text not null, created text default (datetime('now')));
@@ -24,34 +27,34 @@ const settings = () => ({ ...DEFAULTS, ...Object.fromEntries(db.prepare('select 
 
 const app = express();
 app.use(express.json());
+app.use('/photos', express.static(PHOTOS));
 
-// items: one generic store for jobs / money / body / plants, updated with JSON merge-patch
-app.param('kind', (req, res, next, kind) => KINDS.has(kind) ? next() : res.status(404).json({ error: 'unknown kind' }));
-app.get('/api/items/:kind', (req, res) =>
-  res.json(db.prepare('select * from items where kind = ? order by id desc').all(req.params.kind).map(row)));
-app.post('/api/items/:kind', (req, res) => {
-  if (!isObj(req.body)) return bad(res, 'body must be an object');
-  const r = db.prepare('insert into items (kind, data) values (?, ?) returning *').get(req.params.kind, JSON.stringify(req.body));
+// garden photos: raw image body in, file on disk + row in items
+app.get('/api/photos', (req, res) =>
+  res.json(db.prepare(`select * from items where kind = 'photos' order by id desc`).all().map(row)));
+app.post('/api/photos', express.raw({ type: 'image/*', limit: '20mb' }), (req, res) => {
+  const ext = IMAGE[req.headers['content-type']];
+  if (!ext || !req.body?.length) return bad(res, 'Send a JPG, PNG, WebP or GIF photo');
+  const file = `${randomUUID()}.${ext}`;
+  writeFileSync(join(PHOTOS, file), req.body);
+  const data = { file, name: String(req.query.name ?? '').slice(0, 80), date: DATE.test(req.query.date) ? req.query.date : new Date().toISOString().slice(0, 10) };
+  const r = db.prepare(`insert into items (kind, data) values ('photos', ?) returning *`).get(JSON.stringify(data));
   res.status(201).json(row(r));
 });
-app.patch('/api/items/:kind/:id', (req, res) => {
-  if (!isObj(req.body)) return bad(res, 'body must be an object');
-  const r = db.prepare('update items set data = json_patch(data, ?) where id = ? and kind = ? returning *')
-    .get(JSON.stringify(req.body), Number(req.params.id), req.params.kind);
-  r ? res.json(row(r)) : res.status(404).json({ error: 'not found' });
-});
-app.delete('/api/items/:kind/:id', (req, res) => {
-  db.prepare('delete from items where id = ? and kind = ?').run(Number(req.params.id), req.params.kind);
+app.delete('/api/photos/:id', (req, res) => {
+  const r = db.prepare(`delete from items where id = ? and kind = 'photos' returning data`).get(Number(req.params.id));
+  if (r) rmSync(join(PHOTOS, basename(JSON.parse(r.data).file)), { force: true });
   res.status(204).end();
 });
 
-// days: habits / mood / velo per date
+// days: habits / mood / counters per date, merged with JSON merge-patch
 app.get('/api/days', (req, res) =>
   res.json(Object.fromEntries(db.prepare('select * from days').all().map(r => [r.date, JSON.parse(r.data)]))));
 app.patch('/api/days/:date', (req, res) => {
   if (!DATE.test(req.params.date) || !isObj(req.body)) return bad(res, 'bad date or body');
-  const r = db.prepare(`insert into days (date, data) values (?, json_patch('{}', ?))
-    on conflict (date) do update set data = json_patch(data, excluded.data) returning data`)
+  // ?2 applied to the stored row directly, so null deletes a key (merge-patch semantics)
+  const r = db.prepare(`insert into days (date, data) values (?1, json_patch('{}', ?2))
+    on conflict (date) do update set data = json_patch(data, ?2) returning data`)
     .get(req.params.date, JSON.stringify(req.body));
   res.json(JSON.parse(r.data));
 });
