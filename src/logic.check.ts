@@ -1,6 +1,6 @@
 // npm run check — fails loudly if the date/money/streak math breaks
 import assert from 'node:assert/strict';
-import { HABITS, QUESTS, addDays, boss, bossesBeaten, dayXp, daysBetween, money, questFor, streak, weekTotal, world, wrapped, xp } from './logic.ts';
+import { HABITS, QUESTS, addDays, mergePatch, boss, bossesBeaten, dayXp, daysBetween, money, questFor, streak, weekTotal, world, wrapped, xp } from './logic.ts';
 
 assert.equal(addDays('2026-03-31', 1), '2026-04-01');
 assert.equal(daysBetween('2026-10-01', '2026-10-04'), 3);
@@ -41,6 +41,9 @@ assert.equal(wr.perfect, 1);
 assert.equal(wr.best, '2026-10-10');
 assert.equal(wr.veloUnder, 6);
 assert.equal(wr.photos.length, 1);
+
+assert.deepEqual(mergePatch({ habits: { a: true }, velo: 3, x: 1 }, { habits: { b: true }, x: null }), { habits: { a: true, b: true }, velo: 3 });
+assert.deepEqual(mergePatch(undefined, { a: { b: null, c: 1 } }), { a: { c: 1 } });
 
 assert.equal(xp({}, 0).level, 1);
 assert.equal(xp({ '2026-10-10': { ...all, replies: 15 } }, 0).level, 2); // 60 + 150 = 210 XP

@@ -277,6 +277,34 @@ textarea.letter-input { flex: none; min-height: 90px; font-family: Georgia, seri
 .letter { flex: 1; animation: slidein .5s ease-out; }
 .letter p { white-space: pre-wrap; margin-top: 4px; font-family: Georgia, serif; font-style: italic; }
 
+/* backup (phone app) */
+.backup { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.backup span { flex: 1 1 220px; font-size: 13px; }
+
+/* phones: notch/home-bar safe areas, thumb-sized targets, no keyboard hints */
+#root { padding-top: max(28px, env(safe-area-inset-top)); padding-bottom: max(80px, env(safe-area-inset-bottom)); }
+@media (hover: none) {
+  kbd, .hint { display: none; }
+  .stepper button { width: 44px; height: 44px; }
+  .chips button, .reels button { min-height: 40px; }
+  .habits label { padding: 11px 4px; }
+}
+@media (max-width: 720px) {
+  #root { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
+  h1 { font-size: 24px; }
+  .top { align-items: flex-start; }
+  .top-right { gap: 8px; }
+  .chip { font-size: 13px; padding: 6px 12px; }
+  .grid { gap: 12px; }
+  .card { padding: 16px; border-radius: 16px; }
+  .huge { font-size: 64px; }
+  .levelup b { font-size: 64px; }
+  .snap { flex-wrap: wrap; }
+  .snap input { flex-basis: 100%; }
+  .snap .primary { flex: 1; min-height: 44px; }
+  .toast { left: 16px; right: 16px; transform: none; text-align: center; bottom: max(24px, env(safe-area-inset-bottom)); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
   .star, .orbit, .smog circle, .boss-emoji, .city, .quest-die, .pulse, .envelope, .story-body, .letter, .levelup > div { animation: none; }

@@ -26,6 +26,13 @@ npm run check      # logic self-test (dates, streaks, runway, boss, XP, recap)
 npm run typecheck
 ```
 
+### Phone app (Android + iPhone)
+
+`npm run build:app` builds an installable, offline-first app whose data lives on the device (IndexedDB)
+instead of the server. Pushing to `main` deploys it to GitHub Pages (`.github/workflows/deploy-app.yml`).
+Open the Pages URL on the phone, then **Android:** Chrome menu → *Install app* · **iPhone:** Safari → Share → *Add to Home Screen*.
+Settings (⚙️) has **Save backup / Restore** for moving data between devices.
+
 Keyboard: `1–6` habits · `V` Velo · `D/A/R` DM/application/reply · `Q` quest · `W` week recap · `M` mute · `?` help
 
 ## How it works

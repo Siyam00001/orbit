@@ -3,6 +3,7 @@ import {
   COUNTERS, DAMAGE, HABITS, addDays, boss, bossesBeaten, daysBetween, doneCount, money, pkr, questFor, streak, weekTotal, world, wrapped, xp, ymd,
   type Count, type Day, type Item, type Settings,
 } from './logic.ts';
+import { LOCAL, api, photoUrl, shrink } from './api.ts';
 
 type Weather = { city: string; temp: number; code: number; rain: number; hi: number; lo: number };
 type Data = { photos: Item[]; capsules: Item[]; days: Record<string, Day>; settings: Settings };
@@ -38,17 +39,6 @@ function sfx(kind: keyof typeof TUNES) {
     o.connect(g).connect(audio!.destination);
     o.start(t); o.stop(t + 0.22);
   });
-}
-
-async function api<T = any>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  const raw = body instanceof Blob;
-  const res = await fetch('/api' + path, {
-    method,
-    headers: { 'content-type': raw ? body.type : 'application/json' },
-    body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || `${res.status} ${res.statusText}`);
-  return res.status === 204 ? (undefined as T) : res.json();
 }
 
 const weatherIcon = (c: number) => c === 0 ? '☀️' : c <= 3 ? '⛅' : c <= 48 ? '🌫️' : c <= 67 ? '🌦️' : c <= 77 ? '❄️' : c <= 82 ? '🌧️' : '⛈️';
@@ -459,7 +449,7 @@ function Garden({ d, today, act }: P) {
   const [name, setName] = useState('');
   const [film, setFilm] = useState<Item[] | null>(null);
   const pick = useRef<HTMLInputElement>(null);
-  const upload = (f: File) => act(() => api(`/photos?name=${encodeURIComponent(name)}&date=${today}`, 'POST', f), '📸 Saved — your planet grew a tree 🌳')
+  const upload = (f: File) => act(async () => api(`/photos?name=${encodeURIComponent(name)}&date=${today}`, 'POST', await shrink(f)), '📸 Saved — your planet grew a tree 🌳')
     .then(ok => ok && setName(''));
   const oldestFirst = [...d.photos].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
   const byName: Record<string, Item[]> = {};
@@ -478,7 +468,7 @@ function Garden({ d, today, act }: P) {
     </div>}
     <div className="photos">
       {d.photos.map(ph => <figure key={ph.id}>
-        <a href={`/photos/${ph.file}`} target="_blank" rel="noreferrer"><img src={`/photos/${ph.file}`} alt={ph.name || 'Garden photo'} loading="lazy" /></a>
+        <a href={photoUrl(ph)} target="_blank" rel="noreferrer"><img src={photoUrl(ph)} alt={ph.name || 'Garden photo'} loading="lazy" /></a>
         <figcaption>
           <span>{ph.name}</span><small className="mute">{ph.date.slice(5)}</small>
           <button className="del" aria-label="Delete photo" onClick={() => confirm('Delete this photo?') && act(() => api(`/photos/${ph.id}`, 'DELETE'))}>×</button>
@@ -502,7 +492,7 @@ function Flipbook({ photos, onClose }: { photos: Item[]; onClose: () => void }) 
   const ph = photos[i];
   return <div className="overlay" onClick={onClose} role="dialog" aria-label="Garden timelapse">
     <figure className="film">
-      <img src={`/photos/${ph.file}`} alt={ph.name || 'Garden photo'} />
+      <img src={photoUrl(ph)} alt={ph.name || 'Garden photo'} />
       <figcaption>{ph.name || 'Garden'} · {ph.date} <span className="mute">· {i + 1}/{photos.length} · click to close</span></figcaption>
       <div className="bar"><i style={{ width: `${((i + 1) / photos.length) * 100}%` }} /></div>
     </figure>
@@ -524,7 +514,7 @@ function Recap({ d, today, level, onClose }: { d: Data; today: string; level: nu
     ['s-velo', <><p className="kicker">Velo</p><b className="huge">{w.veloUnder}/7</b><p>days at or under your limit</p>
       <p>{(w.velo / 7).toFixed(1)} pouches a day on average</p>{w.cravings > 0 && <p className="mute">💪 {w.cravings} craving{w.cravings > 1 ? 's' : ''} ridden out</p>}</>],
     ['s-garden', <><p className="kicker">Garden</p>
-      {w.photos.length ? <div className="collage">{w.photos.slice(0, 4).map(ph => <img key={ph.id} src={`/photos/${ph.file}`} alt={ph.name || 'Garden photo'} />)}</div>
+      {w.photos.length ? <div className="collage">{w.photos.slice(0, 4).map(ph => <img key={ph.id} src={photoUrl(ph)} alt={ph.name || 'Garden photo'} />)}</div>
         : <b className="huge">🌱</b>}
       <p>{w.photos.length ? `${w.photos.length} new photo${w.photos.length > 1 ? 's' : ''}` : 'No photos this week — your plants miss you'}</p></>],
     ['s-outro', <><p className="kicker">This week you earned</p><b className="huge">+{w.xp} XP</b><p>Level {level} · {w.quests} side quest{w.quests === 1 ? '' : 's'} done</p>
@@ -568,5 +558,29 @@ function SettingsPanel({ s, act, onSaved }: { s: Settings; act: Act; onSaved: ()
     <label>Cash when you started (PKR)<input name="startCash" type="number" step="any" defaultValue={s.startCash} /></label>
     <label>Velo daily limit<input name="veloLimit" type="number" min="0" defaultValue={s.veloLimit} /></label>
     <button className="primary">Save</button>
+    {LOCAL && <Backup act={act} />}
   </form>;
+}
+
+/** Phone app only: data lives on the device, so give it a way off the device. */
+function Backup({ act }: { act: Act }) {
+  const pick = useRef<HTMLInputElement>(null);
+  const save = async () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(await api('/export'))], { type: 'application/json' }));
+    a.download = `orbit-backup-${ymd()}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10e3);
+  };
+  const restore = async (f: File) => {
+    let data: unknown;
+    try { data = JSON.parse(await f.text()); } catch { data = null; }
+    if (confirm('Replace everything in Orbit with this backup?')) act(() => api('/import', 'POST', data), '✅ Backup restored');
+  };
+  return <div className="backup">
+    <span className="mute">Your data lives on this phone. Back it up now and then:</span>
+    <button type="button" onClick={() => act(save, '💾 Backup saved')}>💾 Save backup</button>
+    <button type="button" onClick={() => pick.current!.click()}>📂 Restore</button>
+    <input ref={pick} type="file" accept="application/json,.json" hidden onChange={e => { const f = e.target.files?.[0]; if (f) restore(f); e.target.value = ''; }} />
+  </div>;
 }

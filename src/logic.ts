@@ -21,6 +21,15 @@ export const addDays = (s: string, n: number) => { const [y, m, d] = s.split('-'
 export const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
 export const pkr = (n: number) => 'Rs ' + Math.round(n).toLocaleString('en-PK');
 
+const isObj = (v: unknown): v is Record<string, any> => v !== null && typeof v === 'object' && !Array.isArray(v);
+/** RFC 7396 JSON merge-patch — same semantics as SQLite's json_patch, so both backends agree. */
+export function mergePatch(target: unknown, patch: unknown): any {
+  if (!isObj(patch)) return patch;
+  const out: Record<string, any> = isObj(target) ? { ...target } : {};
+  for (const [k, v] of Object.entries(patch)) if (v === null) delete out[k]; else out[k] = mergePatch(out[k], v);
+  return out;
+}
+
 export const doneCount = (d?: Day) => HABITS.filter(([id]) => d?.habits?.[id]).length;
 const perfect = (d?: Day) => doneCount(d) === HABITS.length;
 

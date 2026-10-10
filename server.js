@@ -4,7 +4,6 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createServer as createVite } from 'vite';
-import react from '@vitejs/plugin-react';
 
 const PORT = process.env.PORT || 4321;
 const DATA = process.env.ORBIT_DATA || join(import.meta.dirname, 'data');
@@ -117,6 +116,6 @@ app.get('/api/weather', async (req, res) => {
 });
 
 // ponytail: Vite middleware serves the UI from this same process; add `vite build` + express.static if it's ever deployed
-const vite = await createVite({ root: import.meta.dirname, plugins: [react()], server: { middlewareMode: true }, appType: 'spa' });
+const vite = await createVite({ root: import.meta.dirname, server: { middlewareMode: true }, appType: 'spa' }); // plugins: vite.config.js
 app.use(vite.middlewares);
 app.listen(PORT, '127.0.0.1', () => console.log(`🪐 Orbit running → http://localhost:${PORT}`));
