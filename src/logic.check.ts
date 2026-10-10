@@ -1,6 +1,6 @@
 // npm run check — fails loudly if the date/money/streak math breaks
 import assert from 'node:assert/strict';
-import { HABITS, addDays, boss, bossesBeaten, daysBetween, money, streak, weekTotal, world, xp } from './logic.ts';
+import { HABITS, QUESTS, addDays, boss, bossesBeaten, dayXp, daysBetween, money, questFor, streak, weekTotal, world, wrapped, xp } from './logic.ts';
 
 assert.equal(addDays('2026-03-31', 1), '2026-04-01');
 assert.equal(daysBetween('2026-10-01', '2026-10-04'), 3);
@@ -29,6 +29,18 @@ assert.ok(Math.abs(w.health - 2 / 7) < 1e-9);
 assert.equal(w.moons, 2);
 assert.equal(w.trees, 14, 'tree count capped');
 assert.equal(world({ '2026-10-10': { velo: 9 } }, '2026-10-10', 0, 8).smog, true);
+
+assert.equal(questFor('2026-10-11'), questFor('2026-10-11'), 'same quest all day');
+assert.ok(QUESTS.includes(questFor('2027-03-05')));
+assert.ok(new Set(Array.from({ length: 30 }, (_, i) => questFor(addDays('2026-10-01', i)))).size > 10, 'quests vary');
+
+assert.equal(dayXp({ ...all, cravings: 2, quest: true }), 60 + 30 + 20);
+const wr = wrapped({ '2026-10-10': { ...all, dms: 4, velo: 9 }, '2026-10-01': { dms: 50 } }, [{ id: 1, date: '2026-10-09' }, { id: 2, date: '2026-09-01' }], '2026-10-10', 8);
+assert.equal(wr.dms, 4, 'only last 7 days');
+assert.equal(wr.perfect, 1);
+assert.equal(wr.best, '2026-10-10');
+assert.equal(wr.veloUnder, 6);
+assert.equal(wr.photos.length, 1);
 
 assert.equal(xp({}, 0).level, 1);
 assert.equal(xp({ '2026-10-10': { ...all, replies: 15 } }, 0).level, 2); // 60 + 150 = 210 XP

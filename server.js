@@ -61,7 +61,7 @@ app.patch('/api/days/:date', (req, res) => {
 });
 
 // counters increment server-side, so rapid taps never overwrite each other
-const COUNTS = new Set(['velo', 'dms', 'apps', 'replies', 'spent', 'earned']);
+const COUNTS = new Set(['velo', 'dms', 'apps', 'replies', 'spent', 'earned', 'cravings']);
 app.post('/api/days/:date/bump', (req, res) => {
   const { key, by } = req.body ?? {};
   if (!DATE.test(req.params.date) || !COUNTS.has(key) || !Number.isFinite(by)) return bad(res, 'bad date, key or amount');
@@ -69,6 +69,22 @@ app.post('/api/days/:date/bump', (req, res) => {
     on conflict (date) do update set data = json_set(data, '$.' || ?2, max(0, coalesce(json_extract(data, '$.' || ?2), 0) + ?3))
     returning data`).get(req.params.date, key, by);
   res.json(JSON.parse(r.data));
+});
+
+// time capsules: the server withholds the text until the open date, so there's no peeking
+const localDate = (d = new Date()) => d.toLocaleDateString('en-CA');
+const capsule = c => { const open = c.opens <= localDate(); return { ...c, open, text: open ? c.text : null }; };
+app.get('/api/capsules', (req, res) =>
+  res.json(db.prepare(`select * from items where kind = 'capsule' order by id desc`).all().map(row).map(capsule)));
+app.post('/api/capsules', (req, res) => {
+  const { text, days } = req.body ?? {};
+  if (typeof text !== 'string' || !text.trim() || !Number.isInteger(days) || days < 1 || days > 3650) return bad(res, 'Write something and pick when it opens');
+  const data = { text: text.slice(0, 5000), created: localDate(), opens: localDate(new Date(Date.now() + days * 864e5)) };
+  res.status(201).json(capsule(row(db.prepare(`insert into items (kind, data) values ('capsule', ?) returning *`).get(JSON.stringify(data)))));
+});
+app.delete('/api/capsules/:id', (req, res) => {
+  db.prepare(`delete from items where id = ? and kind = 'capsule'`).run(Number(req.params.id));
+  res.status(204).end();
 });
 
 app.get('/api/settings', (req, res) => res.json(settings()));

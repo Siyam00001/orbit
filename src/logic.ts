@@ -1,7 +1,7 @@
 // Pure logic shared by the UI and logic.check.ts — no React, no fetch.
 export type Item = { id: number; [field: string]: any };
-export type Count = 'velo' | 'dms' | 'apps' | 'replies' | 'spent' | 'earned';
-export type Day = { habits?: Record<string, boolean>; mood?: number } & { [K in Count]?: number };
+export type Count = 'velo' | 'dms' | 'apps' | 'replies' | 'spent' | 'earned' | 'cravings';
+export type Day = { habits?: Record<string, boolean>; mood?: number; quest?: boolean } & { [K in Count]?: number };
 export type Settings = { name: string; city: string; startCash: number; veloLimit: number; notes: string };
 
 export const HABITS = [
@@ -85,11 +85,40 @@ export function world(days: Record<string, Day>, today: string, photos: number, 
   };
 }
 
+// ── daily side quest: same quest all day, a new one tomorrow ──
+export const QUESTS = [
+  'Text an old friend you miss', 'Drink 2 glasses of water right now', '10-minute walk without your phone',
+  'Stretch for 5 minutes', 'Eat one piece of fruit', 'Clean one small thing — just your desk',
+  'Step outside and look at the sky for 2 minutes', 'Send someone a thank-you message', 'Learn one new AI trick and note it',
+  'Water a plant and talk to it (seriously)', 'Call a family member', '20 push-ups, split up is fine',
+  'In bed before 1am tonight', 'Write 3 things you\'re grateful for in Notes', 'Listen to one full album, no skipping',
+  'Make chai for someone else', 'Post one thing you built on LinkedIn or X', 'Unfollow 5 accounts that drain you',
+  'Photograph something beautiful', 'Ask someone how they\'re really doing',
+];
+export const questFor = (date: string) => QUESTS[(Math.imul(daysBetween('2026-01-01', date), 2654435761) >>> 0) % QUESTS.length];
+
+/** XP one day earns — kept in one place so the level bar and the weekly recap agree. */
+export const dayXp = (d: Day) => doneCount(d) * 10 + (d.mood ? 2 : 0) + (d.dms ?? 0) + (d.apps ?? 0) * 2
+  + (d.replies ?? 0) * 10 + (d.cravings ?? 0) * 15 + (d.quest ? 20 : 0);
+
+/** Last 7 days, today included, for the stories-style recap. */
+export function wrapped(days: Record<string, Day>, photos: Item[], today: string, veloLimit: number) {
+  const keys = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
+  const ds = keys.map(k => days[k] ?? {});
+  const sum = (k: Count) => ds.reduce((a, d) => a + (d[k] ?? 0), 0);
+  const ticks = ds.map(doneCount), top = Math.max(...ticks);
+  return {
+    from: keys[0], ticks: ticks.reduce((a, b) => a + b, 0), perfect: ticks.filter(t => t === HABITS.length).length,
+    best: top ? keys[ticks.indexOf(top)] : null, bestTicks: top,
+    dms: sum('dms'), apps: sum('apps'), replies: sum('replies'), velo: sum('velo'), cravings: sum('cravings'),
+    veloUnder: ds.filter(d => (d.velo ?? 0) <= veloLimit).length, quests: ds.filter(d => d.quest).length,
+    photos: photos.filter(p => p.date >= keys[0] && p.date <= today), xp: ds.reduce((a, d) => a + dayXp(d), 0),
+  };
+}
+
 /** Everything you do earns XP; level n starts at (n-1)² × 100. */
 export function xp(days: Record<string, Day>, photos: number) {
-  const total = Object.values(days).reduce((a, d) =>
-    a + doneCount(d) * 10 + (d.mood ? 2 : 0) + (d.dms ?? 0) + (d.apps ?? 0) * 2 + (d.replies ?? 0) * 10, 0)
-    + photos * 3 + bossesBeaten(days) * 100;
+  const total = Object.values(days).reduce((a, d) => a + dayXp(d), 0) + photos * 3 + bossesBeaten(days) * 100;
   const level = Math.floor(Math.sqrt(total / 100)) + 1;
   const from = (level - 1) ** 2 * 100, to = level ** 2 * 100;
   return { total, level, title: TITLES[Math.min(level - 1, TITLES.length - 1)], pct: (total - from) / (to - from), toNext: to - total };
