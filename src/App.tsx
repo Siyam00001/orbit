@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  COUNTERS, DAMAGE, HABITS, addDays, boss, bossesBeaten, daysBetween, doneCount, money, pkr, questFor, streak, weekTotal, world, wrapped, xp, ymd,
+  COUNTERS, DAMAGE, HABITS, ROADMAP, SKILLS, learned, nextSkill, addDays, boss, bossesBeaten, daysBetween, doneCount, money, pkr, questFor, streak, weekTotal, world, wrapped, xp, ymd,
   type Count, type Day, type Item, type Settings,
 } from './logic.ts';
 import { LOCAL, api, photoUrl, shrink } from './api.ts';
@@ -18,7 +18,7 @@ const LINES = [
   'Show up today — future you is watching.', 'Progress over perfection.', 'Consistency is the cheat code.',
 ];
 const KEYS = [['1 – 6', 'tick a habit'], ['V', '+1 Velo  (Shift+V = −1)'], ['D / A / R', '+1 DM / application / reply'],
-  ['Q', 'side quest done'], ['W', 'your week recap'], ['M', 'sound on / off'], ['?', 'show / hide this']];
+  ['Q', 'side quest done'], ['L', 'today\'s concept learned'], ['W', 'your week recap'], ['M', 'sound on / off'], ['?', 'show / hide this']];
 const isRain = (c: number) => (c >= 51 && c <= 67) || (c >= 80 && c <= 82) || c >= 95;
 
 // ── sound: tiny synth blips, no audio files ──
@@ -59,6 +59,25 @@ function toggleHabit(p: P, id: string) {
   const perfect = on && doneCount(day) + 1 === HABITS.length;
   if (perfect) { p.party(); sfx('win'); } else sfx('tap');
   return p.act(() => api(`/days/${p.today}`, 'PATCH', { habits: { [id]: on } }), perfect ? '🎉 Perfect day! +60 XP' : undefined);
+}
+
+// learning a skill stamps it on today; unlearning removes it from whichever day it was learned
+function toggleSkill(p: P, id: string) {
+  const when = learned(p.d.days)[id];
+  if (when) {
+    sfx('tap');
+    return p.act(() => api(`/days/${when}`, 'PATCH', { skills: (p.d.days[when].skills ?? []).filter(s => s !== id) }));
+  }
+  p.party(); sfx('win');
+  return p.act(() => api(`/days/${p.today}`, 'PATCH', { skills: [...(p.d.days[p.today]?.skills ?? []), id] }),
+    '🛰️ Skill unlocked! +40 XP — a satellite just launched');
+}
+
+// photo → optional name (pre-filled with the last plant, so repeat shots of one plant are a single tap) → save
+function addPhoto(p: P, f: File) {
+  const name = prompt('Name this plant? (optional — same name = growth timelapse)', p.d.photos[0]?.name ?? '') ?? '';
+  return p.act(async () => api(`/photos?name=${encodeURIComponent(name.trim())}&date=${p.today}`, 'POST', await shrink(f)),
+    '📸 Saved — your planet grew a tree 🌳');
 }
 
 function toggleQuest(p: P) {
@@ -129,6 +148,7 @@ export default function App() {
       else if (k === 'a') bump(p, 'apps', 1);
       else if (k === 'r') bump(p, 'replies', 1, '💬 A reply! Answer it fast.');
       else if (k === 'q') toggleQuest(p);
+      else if (k === 'l') { const n = nextSkill(d.days); if (n) toggleSkill(p, n.id); }
       else if (k === 'w') setRecap(r => !r);
       else if (k === 'm') toggleMute();
       else if (k === '?') setHelp(h => !h);
@@ -175,6 +195,7 @@ export default function App() {
       <Velo {...p} />
       <Hunt {...p} />
       <Money {...p} />
+      <Roadmap {...p} />
       <Consistency {...p} />
       <Capsule {...p} />
       <Garden {...p} />
@@ -256,7 +277,9 @@ function Today(p: P) {
 
 /** A planet that mirrors your week: habits green it, streak days become moons, photos grow trees,
  *  Velo overuse adds smog, and city lights spread across the night side as you level up. */
-function World({ d, today, level }: P & { level: number }) {
+function World(p: P & { level: number }) {
+  const { d, today, level } = p;
+  const pick = useRef<HTMLInputElement>(null);
   const w = world(d.days, today, d.photos.length, d.settings.veloLimit), won = boss(d.days, today).dead;
   const hue = 25 + w.health * 115; // dusty brown → lush green
   const status = w.health > 0.75 ? 'Thriving 🌍' : w.health > 0.45 ? 'Growing 🌱' : w.health > 0.15 ? 'Dusty 🏜️' : 'Barren — tick some boxes 🪨';
@@ -296,10 +319,19 @@ function World({ d, today, level }: P & { level: number }) {
         <g key={i} className="orbit" style={{ animationDuration: `${9 + i * 4}s`, animationDelay: `${-i * 2.3}s` }}>
           <circle cx={150 + 76 + i * 7} cy="125" r={4.5 - i * 0.3} className="moon" />
         </g>)}
+      {Array.from({ length: w.satellites }, (_, i) =>
+        <g key={`s${i}`} className="orbit sat-orbit" style={{ animationDuration: `${15 + i * 3}s`, animationDelay: `${-i * 1.7}s` }}>
+          <g transform={`translate(${150 - 92 - (i % 3) * 8} 125) rotate(${i * 36})`} className="sat">
+            <rect x="-2" y="-2" width="4" height="4" /><rect x="-8" y="-1" width="5" height="2" className="panel" /><rect x="3" y="-1" width="5" height="2" className="panel" />
+          </g>
+        </g>)}
       {w.smog && <g className="smog">{[[118, 72, 14], [140, 64, 18], [165, 70, 15], [185, 80, 11]].map(([x, y, r]) => <circle key={x} cx={x} cy={y} r={r} />)}</g>}
     </svg>
+    <button className="plant-btn" onClick={() => pick.current!.click()}>📸 Plant a tree <small>add a garden photo</small></button>
+    <input ref={pick} type="file" accept="image/*" capture="environment" hidden
+      onChange={e => { const f = e.target.files?.[0]; if (f) addPhoto(p, f); e.target.value = ''; }} />
     <p className="mute legend-line">
-      🌙 {w.moons} = streak · 🌳 {w.trees} = photos{lights.length ? ` · 🏙️ ${lights.length} lights = level` : ''}{w.smog ? ' · 💨 smog = over Velo limit' : ''}{won ? ' · 💍 = boss beaten' : ''}
+      🌙 {w.moons} = streak · 🌳 {w.trees} = photos{w.satellites ? ` · 🛰️ ${w.satellites} = skills` : ''}{lights.length ? ` · 🏙️ ${lights.length} lights = level` : ''}{w.smog ? ' · 💨 smog = over Velo limit' : ''}{won ? ' · 💍 = boss beaten' : ''}
     </p>
   </Card>;
 }
@@ -445,23 +477,13 @@ function Capsule({ d, today, act }: P) {
   </Card>;
 }
 
-function Garden({ d, today, act }: P) {
-  const [name, setName] = useState('');
+function Garden({ d, act }: P) {
   const [film, setFilm] = useState<Item[] | null>(null);
-  const pick = useRef<HTMLInputElement>(null);
-  const upload = (f: File) => act(async () => api(`/photos?name=${encodeURIComponent(name)}&date=${today}`, 'POST', await shrink(f)), '📸 Saved — your planet grew a tree 🌳')
-    .then(ok => ok && setName(''));
   const oldestFirst = [...d.photos].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
   const byName: Record<string, Item[]> = {};
   for (const ph of oldestFirst) if (ph.name) (byName[ph.name] ??= []).push(ph);
   const reels = Object.entries(byName).filter(([, l]) => l.length > 1);
   return <Card title="Garden 🌱" className="span-7" extra={<span className="mute">{d.photos.length} photos</span>}>
-    <div className="snap">
-      <input value={name} onChange={e => setName(e.target.value)} placeholder="Name (optional) — same name = timelapse" aria-label="Photo name" />
-      <button className="primary" onClick={() => pick.current!.click()}>📸 Add photo</button>
-      <input ref={pick} type="file" accept="image/*" capture="environment" hidden
-        onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
-    </div>
     {oldestFirst.length > 1 && <div className="reels">
       <button onClick={() => setFilm(oldestFirst)}>▶ Timelapse: everything</button>
       {reels.map(([n, l]) => <button key={n} onClick={() => setFilm(l)}>▶ {n} ({l.length})</button>)}
@@ -474,9 +496,45 @@ function Garden({ d, today, act }: P) {
           <button className="del" aria-label="Delete photo" onClick={() => confirm('Delete this photo?') && act(() => api(`/photos/${ph.id}`, 'DELETE'))}>×</button>
         </figcaption>
       </figure>)}
-      {!d.photos.length && <p className="empty">Snap your plants — give them a name and you get a growth timelapse 🌿</p>}
+      {!d.photos.length && <p className="empty">Tap 📸 Plant a tree on your planet — same plant name each time = a growth timelapse 🌿</p>}
     </div>
     {film && <Flipbook photos={film} onClose={() => setFilm(null)} />}
+  </Card>;
+}
+
+/** Career skill tree: one spotlighted concept a day, Watch/Read links, one tap to mark it learned. */
+function Roadmap(p: P) {
+  const { d } = p, done = learned(d.days), next = nextSkill(d.days), count = Object.keys(done).length;
+  const [open, setOpen] = useState<string | null>(null);
+  const links = (q: string) => <>
+    <a className="btn" href={`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`} target="_blank" rel="noreferrer">▶ Watch</a>
+    <a className="btn" href={`https://www.google.com/search?q=${encodeURIComponent(q)}`} target="_blank" rel="noreferrer">📖 Read</a>
+  </>;
+  return <Card title="Career roadmap 🧭" className="span-12" extra={<span className="pill">{count}/{SKILLS.length} skills · 🛰️ {count}</span>}>
+    {next
+      ? <div className="spotlight">
+          <div><small className="mute">🎯 Learn today · ~20 min · +40 XP · {next.track}</small><b>{next.title}</b><span className="mute">{next.why}</span></div>
+          <div className="spot-actions">{links(next.q)}<button className="primary" onClick={() => toggleSkill(p, next.id)}>✓ Learned</button></div>
+        </div>
+      : <div className="spotlight"><b>🏆 Roadmap complete. You're a different developer now.</b></div>}
+    <div className="tracks">{ROADMAP.map(t => {
+      const n = t.skills.filter(([id]) => done[id]).length;
+      return <div key={t.track} className="lane">
+        <h3>{t.track}<span>{n}/{t.skills.length}</span></h3>
+        <div className="bar"><i style={{ width: `${(n / t.skills.length) * 100}%` }} /></div>
+        <ol className="nodes">{t.skills.map(([id, title, why, q]) =>
+          <li key={id} className={done[id] ? 'done' : next?.id === id ? 'next' : ''}>
+            <button className="node" onClick={() => setOpen(o => (o === id ? null : id))} aria-expanded={open === id}>
+              <span className="dot" aria-hidden="true">{done[id] ? '✓' : ''}</span>{title}
+            </button>
+            {open === id && <div className="node-detail">
+              <p className="mute">{why}</p>
+              <div className="spot-actions">{links(q)}<button onClick={() => toggleSkill(p, id)}>{done[id] ? 'Unmark' : '✓ Learned'}</button></div>
+            </div>}
+          </li>)}
+        </ol>
+      </div>;
+    })}</div>
   </Card>;
 }
 
@@ -518,6 +576,7 @@ function Recap({ d, today, level, onClose }: { d: Data; today: string; level: nu
         : <b className="huge">🌱</b>}
       <p>{w.photos.length ? `${w.photos.length} new photo${w.photos.length > 1 ? 's' : ''}` : 'No photos this week — your plants miss you'}</p></>],
     ['s-outro', <><p className="kicker">This week you earned</p><b className="huge">+{w.xp} XP</b><p>Level {level} · {w.quests} side quest{w.quests === 1 ? '' : 's'} done</p>
+      {w.skills > 0 && <p>🛰️ {w.skills} new skill{w.skills > 1 ? 's' : ''} learned</p>}
       <p className="mute">Rough season, not a rough life. See you next week.</p></>],
   ];
   const [i, setI] = useState(0);

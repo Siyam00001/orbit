@@ -1,7 +1,7 @@
 // Pure logic shared by the UI and logic.check.ts — no React, no fetch.
 export type Item = { id: number; [field: string]: any };
 export type Count = 'velo' | 'dms' | 'apps' | 'replies' | 'spent' | 'earned' | 'cravings';
-export type Day = { habits?: Record<string, boolean>; mood?: number; quest?: boolean } & { [K in Count]?: number };
+export type Day = { habits?: Record<string, boolean>; mood?: number; quest?: boolean; skills?: string[] } & { [K in Count]?: number };
 export type Settings = { name: string; city: string; startCash: number; veloLimit: number; notes: string };
 
 export const HABITS = [
@@ -91,6 +91,7 @@ export function world(days: Record<string, Day>, today: string, photos: number, 
     trees: Math.min(photos, 14),
     smog: (days[today]?.velo ?? 0) > veloLimit,
     mood: days[today]?.mood ?? 0,
+    satellites: Math.min(Object.keys(learned(days)).length, 10),
   };
 }
 
@@ -106,9 +107,54 @@ export const QUESTS = [
 ];
 export const questFor = (date: string) => QUESTS[(Math.imul(daysBetween('2026-01-01', date), 2654435761) >>> 0) % QUESTS.length];
 
+// ── career roadmap: [id, title, why it matters, search phrase] — learned skills are stored on the day you learned them ──
+export const ROADMAP = [
+  { track: '🤖 AI engineering', skills: [
+    ['prompts', 'Prompt engineering', 'Clear instructions, examples and roles — the base of every AI feature.', 'prompt engineering for developers'],
+    ['structured', 'Structured outputs', 'Make models return JSON your code can trust (Zod schemas).', 'LLM structured outputs JSON schema zod'],
+    ['tools', 'Tool / function calling', 'Let a model call your APIs — the core of every agent.', 'LLM function calling tool use tutorial'],
+    ['embeddings', 'Embeddings & vector search', 'Search by meaning, not keywords (pgvector, Pinecone).', 'embeddings vector search pgvector tutorial'],
+    ['rag', 'RAG — chat with your docs', 'The #1 thing clients ask for: AI over their own data.', 'RAG retrieval augmented generation tutorial'],
+    ['streaming', 'Streaming responses', 'Token-by-token UI that feels instant.', 'stream LLM response React Node tutorial'],
+    ['agents', 'AI agents & tool loops', 'Multi-step tasks: plan, call tools, check results.', 'build AI agent tool loop tutorial'],
+    ['mcp', 'MCP (Model Context Protocol)', 'The standard way to plug tools and data into AI apps.', 'Model Context Protocol MCP server tutorial'],
+    ['evals', 'Evals — testing AI output', 'Prove your AI feature works before a client finds out it doesn\'t.', 'LLM evals testing tutorial'],
+    ['guardrails', 'Prompt injection & guardrails', 'Stop user input from hijacking your AI.', 'prompt injection guardrails LLM security'],
+  ] },
+  { track: '🚀 Ship like a senior', skills: [
+    ['ts', 'Advanced TypeScript', 'Generics and utility types — reads senior in any codebase.', 'advanced TypeScript generics utility types'],
+    ['postgres', 'Postgres & SQL', 'Most jobs use it; Firestore alone limits you.', 'PostgreSQL SQL tutorial for developers'],
+    ['auth', 'Auth: OAuth & sessions', 'Login done right shows up in every SaaS gig.', 'OAuth sessions JWT authentication explained'],
+    ['docker', 'Docker', 'Ship anywhere — expected in remote job interviews.', 'Docker tutorial for Node.js developers'],
+    ['testing', 'Testing: Vitest + Playwright', 'Unit and browser tests — the habit clients pay more for.', 'Vitest Playwright testing tutorial'],
+    ['cicd', 'CI/CD with GitHub Actions', 'You already have one deploying Orbit — learn it properly.', 'GitHub Actions CI CD tutorial'],
+    ['nextjs', 'Next.js App Router', 'The most requested React framework in job posts.', 'Next.js App Router tutorial'],
+    ['design', 'System design basics', 'Queues, caching, scaling — interviews always ask.', 'system design basics for web developers'],
+  ] },
+  { track: '💼 Get paid', skills: [
+    ['casestudy', 'Write a case study', 'Turn imgnfn and Orbit into stories clients trust.', 'developer portfolio case study how to write'],
+    ['proposals', 'Winning proposals & DMs', 'Short, specific, about their problem — not your CV.', 'freelance proposal writing tips developer'],
+    ['pricing', 'Pricing your work', 'Fixed vs hourly, and when to raise your rates.', 'how to price freelance software development'],
+    ['scoping', 'Client calls & scoping', 'Ask the right questions before you quote.', 'freelance developer discovery call scoping'],
+    ['async', 'Async communication', 'Clear updates and Loom videos — remote teams hire for this.', 'async communication remote developer'],
+    ['interviews', 'Remote interview prep', 'Take-homes, live coding, and talking about past work.', 'remote developer interview preparation'],
+  ] },
+] as const;
+export const SKILLS = ROADMAP.flatMap(t => t.skills.map(([id, title, why, q]) => ({ id, title, why, q, track: t.track })));
+
+/** skill id → the date it was learned */
+export function learned(days: Record<string, Day>) {
+  const out: Record<string, string> = {};
+  for (const [date, d] of Object.entries(days)) for (const id of d.skills ?? []) out[id] = date;
+  return out;
+}
+
+/** The next concept to study: first unlearned skill, walking the tracks in order. */
+export const nextSkill = (days: Record<string, Day>) => { const l = learned(days); return SKILLS.find(s => !l[s.id]) ?? null; };
+
 /** XP one day earns — kept in one place so the level bar and the weekly recap agree. */
 export const dayXp = (d: Day) => doneCount(d) * 10 + (d.mood ? 2 : 0) + (d.dms ?? 0) + (d.apps ?? 0) * 2
-  + (d.replies ?? 0) * 10 + (d.cravings ?? 0) * 15 + (d.quest ? 20 : 0);
+  + (d.replies ?? 0) * 10 + (d.cravings ?? 0) * 15 + (d.quest ? 20 : 0) + (d.skills?.length ?? 0) * 40;
 
 /** Last 7 days, today included, for the stories-style recap. */
 export function wrapped(days: Record<string, Day>, photos: Item[], today: string, veloLimit: number) {
@@ -121,6 +167,7 @@ export function wrapped(days: Record<string, Day>, photos: Item[], today: string
     best: top ? keys[ticks.indexOf(top)] : null, bestTicks: top,
     dms: sum('dms'), apps: sum('apps'), replies: sum('replies'), velo: sum('velo'), cravings: sum('cravings'),
     veloUnder: ds.filter(d => (d.velo ?? 0) <= veloLimit).length, quests: ds.filter(d => d.quest).length,
+    skills: ds.reduce((a, d) => a + (d.skills?.length ?? 0), 0),
     photos: photos.filter(p => p.date >= keys[0] && p.date <= today), xp: ds.reduce((a, d) => a + dayXp(d), 0),
   };
 }

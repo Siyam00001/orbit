@@ -83,8 +83,9 @@ let wx: { at: number; city: string; data: unknown } = { at: 0, city: '', data: n
 async function weather() {
   const { city } = await settings();
   if (wx.city === city && Date.now() - wx.at < 30 * 60e3) return wx.data;
-  const geo = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&name=${encodeURIComponent(city)}`)).json();
-  const p = geo.results?.[0] ?? fail(`city "${city}" not found`);
+  // fuzzy search ranks e.g. "Santa Catarina Tlaxila" (Mexico) above "Taxila" (Pakistan): prefer an exact name match
+  const geo = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=10&name=${encodeURIComponent(city)}`)).json();
+  const p = geo.results?.find((r: { name: string }) => r.name.toLowerCase() === city.trim().toLowerCase()) ?? geo.results?.[0] ?? fail(`city "${city}" not found`);
   const f = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.latitude}&longitude=${p.longitude}` +
     '&current=temperature_2m,weather_code&daily=precipitation_probability_max,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1')).json();
   wx = { at: Date.now(), city, data: {

@@ -105,8 +105,6 @@ button:disabled { opacity: .35; cursor: default; }
 .chips button { padding: 5px 12px; border-radius: 99px; font-size: 14px; }
 
 /* garden photos */
-.snap { display: flex; gap: 8px; margin-bottom: 14px; }
-.snap input { flex: 1; min-width: 0; }
 .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
 .photos .empty { grid-column: 1 / -1; }
 .photos figure { margin: 0; background: var(--card2); border-radius: 12px; overflow: hidden; }
@@ -277,6 +275,41 @@ textarea.letter-input { flex: none; min-height: 90px; font-family: Georgia, seri
 .letter { flex: 1; animation: slidein .5s ease-out; }
 .letter p { white-space: pre-wrap; margin-top: 4px; font-family: Georgia, serif; font-style: italic; }
 
+/* planet: photo button + skill satellites */
+.plant-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 4px; min-height: 44px;
+  border-radius: 99px; background: linear-gradient(90deg, #16a34a33, #22d3ee22); border-color: #34d39955; font-weight: 600; }
+.plant-btn small { font-weight: 400; color: var(--mute); }
+.sat-orbit { animation-direction: reverse; }
+.sat rect { fill: #e2e8f0; }
+.sat .panel { fill: #60a5fa; }
+
+/* career roadmap */
+a.btn { display: inline-flex; align-items: center; gap: 4px; color: var(--text); text-decoration: none; background: var(--card2);
+  border: 1px solid var(--line); border-radius: 10px; padding: 7px 12px; font-size: 14px; }
+a.btn:hover { border-color: var(--acc); }
+.spotlight { display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: 16px; margin-bottom: 16px;
+  background: linear-gradient(135deg, #8b5cf633, #22d3ee1a); border: 1px solid #8b5cf655; }
+.spotlight > div:first-child { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.spotlight b { font-size: 19px; }
+.spot-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.tracks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.lane { background: var(--card2); border-radius: 14px; padding: 12px; min-width: 0; }
+.lane h3 { display: flex; justify-content: space-between; margin: 0 2px 8px; font-size: 14px; }
+.lane h3 span { color: var(--mute); font-weight: 500; }
+.lane .bar { margin: 0 0 10px; }
+.nodes { list-style: none; padding: 0; margin: 0; position: relative; }
+.nodes::before { content: ''; position: absolute; left: 13px; top: 14px; bottom: 14px; width: 2px; background: var(--line); }
+.node { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0; padding: 6px 4px; font-size: 14px; position: relative; }
+.dot { width: 20px; height: 20px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800;
+  background: var(--card); border: 2px solid var(--line); }
+.nodes li.done .node { color: var(--mute); }
+.nodes li.done .dot { background: var(--ok); border-color: var(--ok); color: #052e16; }
+.nodes li.next .node { font-weight: 700; }
+.nodes li.next .dot { border-color: var(--acc); box-shadow: 0 0 0 4px #8b5cf633; animation: glow 2s ease-in-out infinite; }
+.node-detail { margin: 2px 0 8px 34px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; animation: slidein .3s ease-out; }
+.node-detail button, .node-detail a.btn { padding: 5px 10px; font-size: 13px; }
+@media (max-width: 1000px) { .tracks { grid-template-columns: 1fr; } }
+
 /* backup (phone app) */
 .backup { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
 .backup span { flex: 1 1 220px; font-size: 13px; }
@@ -299,9 +332,8 @@ textarea.letter-input { flex: none; min-height: 90px; font-family: Georgia, seri
   .card { padding: 16px; border-radius: 16px; }
   .huge { font-size: 64px; }
   .levelup b { font-size: 64px; }
-  .snap { flex-wrap: wrap; }
-  .snap input { flex-basis: 100%; }
-  .snap .primary { flex: 1; min-height: 44px; }
+  .tracks { grid-template-columns: 1fr; }
+  .spotlight { flex-direction: column; align-items: stretch; }
   .toast { left: 16px; right: 16px; transform: none; text-align: center; bottom: max(24px, env(safe-area-inset-bottom)); }
 }
 
