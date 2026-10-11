@@ -169,21 +169,31 @@ export default function App() {
     : LINES[Math.abs(daysBetween('2026-01-01', today)) % LINES.length];
   const sunday = new Date().getDay() === 0;
 
+  const ring = 2 * Math.PI * 29;
+
   return <>
+    <div className="nebula" aria-hidden="true"><i /><i /><i /></div>
     {wx && isRain(wx.code) && <Rain />}
     <header className="top">
-      <div>
-        <p className="mute">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-        <h1>{greet}, {d.settings.name} 👋</h1>
-        <p className="line">“{line}”</p>
+      <div className="hello">
+        <div className="avatar" title={`Level ${lv.level} · ${lv.total} XP · ${lv.toNext} XP to next level`}>
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <circle cx="32" cy="32" r="29" className="av-bg" />
+            <circle cx="32" cy="32" r="29" className="av-fg" strokeDasharray={ring} strokeDashoffset={ring * (1 - lv.pct)} transform="rotate(-90 32 32)" />
+          </svg>
+          <span>{d.settings.name.slice(0, 1).toUpperCase()}</span>
+          <b>{lv.level}</b>
+        </div>
+        <div>
+          <p className="mute">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+          <h1>{greet}, <span className="grad">{d.settings.name}</span></h1>
+          <p className="line">“{line}”</p>
+        </div>
       </div>
       <div className="top-right">
         <button className={`recap-btn ${sunday ? 'pulse' : ''}`} onClick={() => setRecap(true)}>🎬 Your week</button>
         {wx && <div className="chip" title={`${wx.lo}° – ${wx.hi}° today`}>{weatherIcon(wx.code)} {wx.temp}° · {wx.rain}% rain · {wx.city}</div>}
-        <div className="level" title={`${lv.total} XP · ${lv.toNext} XP to next level`}>
-          <div className="level-row"><b>Lv {lv.level}</b><span>{lv.title}</span></div>
-          <div className="bar"><i style={{ width: `${lv.pct * 100}%` }} /></div>
-        </div>
+        <div className="chip rank" title={`${lv.toNext} XP to level ${lv.level + 1}`}>🏅 {lv.title}</div>
         <button className="icon-btn" onClick={toggleMute} aria-label={muted ? 'Turn sound on' : 'Mute sound'}>{muted ? '🔇' : '🔊'}</button>
         <button className="icon-btn" onClick={() => setShowSettings(s => !s)} aria-label="Settings">⚙️</button>
       </div>
@@ -198,9 +208,9 @@ export default function App() {
       <Roadmap {...p} />
       <Consistency {...p} />
       <Capsule {...p} />
-      <Garden {...p} />
       <Notes {...p} />
     </main>
+    <Dock {...p} onRecap={() => setRecap(true)} />
     <footer className="hint mute"><button className="link" onClick={() => setHelp(true)}>⌨️ Lazy mode — press <kbd>?</kbd> for keyboard shortcuts</button></footer>
     {help && <div className="overlay" onClick={() => setHelp(false)} role="dialog" aria-label="Keyboard shortcuts">
       <div className="card keys" onClick={e => e.stopPropagation()}>
@@ -280,6 +290,12 @@ function Today(p: P) {
 function World(p: P & { level: number }) {
   const { d, today, level } = p;
   const pick = useRef<HTMLInputElement>(null);
+  const [film, setFilm] = useState<Item[] | null>(null);
+  useEffect(() => { const snap = () => pick.current?.click(); addEventListener('orbit:photo', snap); return () => removeEventListener('orbit:photo', snap); }, []);
+  const oldestFirst = [...d.photos].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+  const byName: Record<string, Item[]> = {};
+  for (const ph of oldestFirst) if (ph.name) (byName[ph.name] ??= []).push(ph);
+  const reels = Object.entries(byName).filter(([, l]) => l.length > 1);
   const w = world(d.days, today, d.photos.length, d.settings.veloLimit), won = boss(d.days, today).dead;
   const hue = 25 + w.health * 115; // dusty brown → lush green
   const status = w.health > 0.75 ? 'Thriving 🌍' : w.health > 0.45 ? 'Growing 🌱' : w.health > 0.15 ? 'Dusty 🏜️' : 'Barren — tick some boxes 🪨';
@@ -330,6 +346,11 @@ function World(p: P & { level: number }) {
     <button className="plant-btn" onClick={() => pick.current!.click()}>📸 Plant a tree <small>add a garden photo</small></button>
     <input ref={pick} type="file" accept="image/*" capture="environment" hidden
       onChange={e => { const f = e.target.files?.[0]; if (f) addPhoto(p, f); e.target.value = ''; }} />
+    {oldestFirst.length > 0 && <div className="reels">
+      <button onClick={() => setFilm(oldestFirst)}>▶ Watch it grow ({oldestFirst.length})</button>
+      {reels.map(([n, l]) => <button key={n} onClick={() => setFilm(l)}>🌿 {n} ({l.length})</button>)}
+    </div>}
+    {film && <Flipbook photos={film} act={p.act} onClose={() => setFilm(null)} />}
     <p className="mute legend-line">
       🌙 {w.moons} = streak · 🌳 {w.trees} = photos{w.satellites ? ` · 🛰️ ${w.satellites} = skills` : ''}{lights.length ? ` · 🏙️ ${lights.length} lights = level` : ''}{w.smog ? ' · 💨 smog = over Velo limit' : ''}{won ? ' · 💍 = boss beaten' : ''}
     </p>
@@ -339,6 +360,7 @@ function World(p: P & { level: number }) {
 function Velo(p: P) {
   const { d, today } = p, n = d.days[today]?.velo ?? 0, limit = d.settings.veloLimit;
   const [sos, setSos] = useState(false);
+  useEffect(() => { const open = () => setSos(true); addEventListener('orbit:sos', open); return () => removeEventListener('orbit:sos', open); }, []);
   const week = Array.from({ length: 7 }, (_, i) => { const k = addDays(today, i - 6); return [k, d.days[k]?.velo ?? 0] as const; });
   const max = Math.max(limit, 1, ...week.map(([, v]) => v));
   const beaten = weekTotal(d.days, 'cravings', today);
@@ -477,29 +499,29 @@ function Capsule({ d, today, act }: P) {
   </Card>;
 }
 
-function Garden({ d, act }: P) {
-  const [film, setFilm] = useState<Item[] | null>(null);
-  const oldestFirst = [...d.photos].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
-  const byName: Record<string, Item[]> = {};
-  for (const ph of oldestFirst) if (ph.name) (byName[ph.name] ??= []).push(ph);
-  const reels = Object.entries(byName).filter(([, l]) => l.length > 1);
-  return <Card title="Garden 🌱" className="span-7" extra={<span className="mute">{d.photos.length} photos</span>}>
-    {oldestFirst.length > 1 && <div className="reels">
-      <button onClick={() => setFilm(oldestFirst)}>▶ Timelapse: everything</button>
-      {reels.map(([n, l]) => <button key={n} onClick={() => setFilm(l)}>▶ {n} ({l.length})</button>)}
-    </div>}
-    <div className="photos">
-      {d.photos.map(ph => <figure key={ph.id}>
-        <a href={photoUrl(ph)} target="_blank" rel="noreferrer"><img src={photoUrl(ph)} alt={ph.name || 'Garden photo'} loading="lazy" /></a>
-        <figcaption>
-          <span>{ph.name}</span><small className="mute">{ph.date.slice(5)}</small>
-          <button className="del" aria-label="Delete photo" onClick={() => confirm('Delete this photo?') && act(() => api(`/photos/${ph.id}`, 'DELETE'))}>×</button>
-        </figcaption>
-      </figure>)}
-      {!d.photos.length && <p className="empty">Tap 📸 Plant a tree on your planet — same plant name each time = a growth timelapse 🌿</p>}
-    </div>
-    {film && <Flipbook photos={film} onClose={() => setFilm(null)} />}
-  </Card>;
+/** Phone-only floating thumb bar for the four things you do most. */
+function Dock(p: P & { onRecap: () => void }) {
+  return <nav className="dock" aria-label="Quick actions">
+    <button onClick={() => bump(p, 'velo', 1)}><b>{p.d.days[p.today]?.velo ?? 0}</b><small>+ Velo</small></button>
+    <button onClick={() => dispatchEvent(new Event('orbit:sos'))}><b>🆘</b><small>Craving</small></button>
+    {/* dispatched synchronously inside the tap, so the file picker still counts as user-initiated */}
+    <button onClick={() => dispatchEvent(new Event('orbit:photo'))}><b>📸</b><small>Plant</small></button>
+    <button onClick={p.onRecap}><b>🎬</b><small>Week</small></button>
+  </nav>;
+}
+
+const THEMES = [['cosmos', 'Cosmos', '#8b5cf6', '#22d3ee'], ['aurora', 'Aurora', '#10b981', '#a3e635'],
+  ['sunset', 'Sunset', '#f97316', '#ec4899'], ['ocean', 'Ocean', '#3b82f6', '#06b6d4']] as const;
+
+function ThemePicker() {
+  const [theme, setTheme] = useState(document.documentElement.dataset.theme ?? 'cosmos');
+  const choose = (id: string) => { document.documentElement.dataset.theme = id; store.set('orbit-theme', id); setTheme(id); sfx('tap'); };
+  return <div className="themes">
+    <span className="mute">Theme</span>
+    {THEMES.map(([id, label, a, b]) =>
+      <button type="button" key={id} className={theme === id ? 'on' : ''} aria-pressed={theme === id} onClick={() => choose(id)}
+        style={{ background: `linear-gradient(135deg, ${a}, ${b})` }}>{label}</button>)}
+  </div>;
 }
 
 /** Career skill tree: one spotlighted concept a day, Watch/Read links, one tap to mark it learned. */
@@ -538,8 +560,8 @@ function Roadmap(p: P) {
   </Card>;
 }
 
-/** Plays photos oldest → newest like a flipbook. */
-function Flipbook({ photos, onClose }: { photos: Item[]; onClose: () => void }) {
+/** Plays photos oldest → newest like a flipbook; the photo on screen can be deleted. */
+function Flipbook({ photos, onClose, act }: { photos: Item[]; onClose: () => void; act: Act }) {
   const [i, setI] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setI(x => (x + 1) % photos.length), 900);
@@ -551,8 +573,12 @@ function Flipbook({ photos, onClose }: { photos: Item[]; onClose: () => void }) 
   return <div className="overlay" onClick={onClose} role="dialog" aria-label="Garden timelapse">
     <figure className="film">
       <img src={photoUrl(ph)} alt={ph.name || 'Garden photo'} />
-      <figcaption>{ph.name || 'Garden'} · {ph.date} <span className="mute">· {i + 1}/{photos.length} · click to close</span></figcaption>
+      <figcaption>{ph.name || 'Garden'} · {ph.date} <span className="mute">· {i + 1}/{photos.length} · tap to close</span></figcaption>
       <div className="bar"><i style={{ width: `${((i + 1) / photos.length) * 100}%` }} /></div>
+      <button className="film-del" onClick={e => {
+        e.stopPropagation();
+        if (confirm('Delete this photo?')) { onClose(); act(() => api(`/photos/${ph.id}`, 'DELETE'), '🗑 Photo deleted'); }
+      }}>🗑 Delete this photo</button>
     </figure>
   </div>;
 }
@@ -600,7 +626,7 @@ function Recap({ d, today, level, onClose }: { d: Data; today: string; level: nu
 
 function Notes({ d, act }: P) {
   const [text, setText] = useState(d.settings.notes);
-  return <Card title="Notes & goals" className="span-5" extra={text !== d.settings.notes ? <span className="mute">saves when you click away</span> : undefined}>
+  return <Card title="Notes & goals" className="span-12" extra={text !== d.settings.notes ? <span className="mute">saves when you click away</span> : undefined}>
     <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Goals, ideas, anything on your mind…"
       onBlur={() => text !== d.settings.notes && act(() => api('/settings', 'PATCH', { notes: text }))} />
   </Card>;
@@ -617,6 +643,7 @@ function SettingsPanel({ s, act, onSaved }: { s: Settings; act: Act; onSaved: ()
     <label>Cash when you started (PKR)<input name="startCash" type="number" step="any" defaultValue={s.startCash} /></label>
     <label>Velo daily limit<input name="veloLimit" type="number" min="0" defaultValue={s.veloLimit} /></label>
     <button className="primary">Save</button>
+    <ThemePicker />
     {LOCAL && <Backup act={act} />}
   </form>;
 }

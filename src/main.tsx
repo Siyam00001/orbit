@@ -1,7 +1,14 @@
 import { createRoot } from 'react-dom/client';
+import '@fontsource/space-grotesk/500.css';
+import '@fontsource/space-grotesk/700.css';
 import App from './App.tsx';
 import { LOCAL } from './api.ts';
 import './styles.css';
+
+// apply the saved theme before the first paint so there's no flash of the default colours
+let theme: string | null = null;
+try { theme = localStorage.getItem('orbit-theme'); } catch { /* storage blocked: default theme */ }
+document.documentElement.dataset.theme = theme || 'cosmos';
 
 createRoot(document.getElementById('root')!).render(<App />);
 
