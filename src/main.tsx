@@ -1,3 +1,4 @@
+import { Component, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource/space-grotesk/500.css';
 import '@fontsource/space-grotesk/700.css';
@@ -10,7 +11,21 @@ let theme: string | null = null;
 try { theme = localStorage.getItem('orbit-theme'); } catch { /* storage blocked: default theme */ }
 document.documentElement.dataset.theme = theme || 'cosmos';
 
-createRoot(document.getElementById('root')!).render(<App />);
+/** A crash anywhere shows the error and a reload button instead of a blank white screen. */
+class Crash extends Component<{ children: ReactNode }, { err: Error | null }> {
+  state = { err: null as Error | null };
+  static getDerivedStateFromError(err: Error) { return { err }; }
+  render() {
+    const { err } = this.state;
+    return err
+      ? <div className="loading"><div className="crash"><b>Orbit hit a snag 😕</b><code>{err.message}</code>
+          <span className="mute">Screenshot this and send it over.</span>
+          <button className="primary" onClick={() => location.reload()}>Reload</button></div></div>
+      : this.props.children;
+  }
+}
+
+createRoot(document.getElementById('root')!).render(<Crash><App /></Crash>);
 
 if (LOCAL) {
   // phone app: work offline, and ask the browser not to evict on-device data under storage pressure

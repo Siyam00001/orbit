@@ -335,6 +335,8 @@ a.btn:hover { border-color: var(--acc); }
 .namer .reels { margin: 0; }
 .namer input { width: 100%; min-height: 44px; }
 .namer-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.crash { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; max-width: 340px; padding: 16px; color: var(--text); }
+.crash code { font-size: 12px; background: var(--card2); padding: 8px 10px; border-radius: 8px; word-break: break-word; color: var(--bad); }
 .film-del { display: block; margin: 12px auto 0; background: #0006; color: #fff; border-color: #ffffff33; }
 .spotlight > div:first-child { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .spotlight b { font-size: 19px; }

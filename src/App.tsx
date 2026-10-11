@@ -111,7 +111,9 @@ export default function App() {
   const party = () => { const t = Date.now(); setConfetti(t); setTimeout(() => setConfetti(c => (c === t ? 0 : c)), 2500); };
   const toggleMute = () => setMuted(m => { store.set('orbit-muted', m ? '0' : '1'); return !m; });
   const loadWeather = () => api<Weather>('/weather').then(setWx, () => setWx(null));
-  useEffect(() => { load().catch((e: Error) => flash(e.message, true)); loadWeather(); }, [load]);
+  const [loadErr, setLoadErr] = useState('');
+  const start = () => { setLoadErr(''); load().catch((e: Error) => setLoadErr(e?.message || String(e))); };
+  useEffect(() => { start(); loadWeather(); }, [load]);
 
   // level-up fanfare when XP crosses a threshold (not on first load)
   useEffect(() => {
@@ -160,7 +162,9 @@ export default function App() {
     return () => removeEventListener('keydown', onKey);
   }, [d]);
 
-  if (!d) return <div className="loading">🪐 Loading…</div>;
+  if (!d) return <div className="loading">{loadErr
+    ? <div className="crash"><b>Couldn't load your data 😕</b><code>{loadErr}</code><button className="primary" onClick={start}>Try again</button></div>
+    : '🪐 Loading…'}</div>;
   const p: P = { d, today, act, party };
   const lv = xp(d.days, d.photos.length);
   const hour = new Date().getHours();
@@ -301,7 +305,7 @@ function World(p: P & { level: number }) {
   const byName: Record<string, Item[]> = {};
   for (const ph of oldestFirst) (byName[ph.name || ''] ??= []).push(ph);
   const { '': unnamed, ...named } = byName;
-  const plants = Object.keys(named).sort((a, b) => named[b].at(-1)!.id - named[a].at(-1)!.id); // most recently photographed first
+  const plants = Object.keys(named).sort((a, b) => named[b][named[b].length - 1].id - named[a][named[a].length - 1].id); // most recently photographed first (no .at(): iOS < 15.4)
   const w = world(d.days, today, d.photos.length, d.settings.veloLimit), won = boss(d.days, today).dead;
   const hue = 25 + w.health * 115; // dusty brown → lush green
   const status = w.health > 0.75 ? 'Thriving 🌍' : w.health > 0.45 ? 'Growing 🌱' : w.health > 0.15 ? 'Dusty 🏜️' : 'Barren — tick some boxes 🪨';
@@ -421,7 +425,7 @@ function Hunt(p: P) {
   }, []);
   return <Card title="Job hunt · boss fight" className="span-7" extra={<span className="pill">🏆 {bossesBeaten(d.days)} beaten</span>}>
     <div className={`boss ${b.dead ? 'dead' : ''}`}>
-      <div className="boss-emoji" key={hits.at(-1)?.id} aria-hidden="true">{b.dead ? '💀' : b.emoji}</div>
+      <div className="boss-emoji" key={hits[hits.length - 1]?.id} aria-hidden="true">{b.dead ? '💀' : b.emoji}</div>
       {hits.map(h => <span key={h.id} className="dmg" aria-hidden="true">−{h.n}</span>)}
       <div className="boss-info">
         <b>{b.name}</b>
