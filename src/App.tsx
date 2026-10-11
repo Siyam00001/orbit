@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
   COUNTERS, DAMAGE, HABITS, ROADMAP, SKILLS, learned, nextSkill, addDays, boss, bossesBeaten, daysBetween, doneCount, money, pkr, questFor, streak, weekTotal, world, wrapped, xp, ymd,
   type Count, type Day, type Item, type Settings,
@@ -74,10 +75,9 @@ function toggleSkill(p: P, id: string) {
 }
 
 // photo → optional name (pre-filled with the last plant, so repeat shots of one plant are a single tap) → save
-function addPhoto(p: P, f: File) {
-  const name = prompt('Name this plant? (optional — same name = growth timelapse)', p.d.photos[0]?.name ?? '') ?? '';
+function addPhoto(p: P, f: File, name: string) {
   return p.act(async () => api(`/photos?name=${encodeURIComponent(name.trim())}&date=${p.today}`, 'POST', await shrink(f)),
-    '📸 Saved — your planet grew a tree 🌳');
+    name.trim() ? `📸 ${name.trim()} saved — your planet grew a tree 🌳` : '📸 Saved — your planet grew a tree 🌳');
 }
 
 function toggleQuest(p: P) {
@@ -228,6 +228,10 @@ export default function App() {
   </>;
 }
 
+// pop-ups opened from inside a card must render at the page root: the cards' backdrop-filter
+// makes them the containing block for position:fixed, which would trap the overlay inside the card
+const toBody = (node: ReactNode) => createPortal(node, document.body);
+
 const Card = ({ title, extra, className = '', children }: { title: string; extra?: ReactNode; className?: string; children: ReactNode }) =>
   <section className={`card ${className}`}><div className="card-head"><h2>{title}</h2>{extra}</div>{children}</section>;
 
@@ -291,11 +295,13 @@ function World(p: P & { level: number }) {
   const { d, today, level } = p;
   const pick = useRef<HTMLInputElement>(null);
   const [film, setFilm] = useState<Item[] | null>(null);
+  const [snapped, setSnapped] = useState<File | null>(null); // photo waiting for its name
   useEffect(() => { const snap = () => pick.current?.click(); addEventListener('orbit:photo', snap); return () => removeEventListener('orbit:photo', snap); }, []);
   const oldestFirst = [...d.photos].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
   const byName: Record<string, Item[]> = {};
-  for (const ph of oldestFirst) if (ph.name) (byName[ph.name] ??= []).push(ph);
-  const reels = Object.entries(byName).filter(([, l]) => l.length > 1);
+  for (const ph of oldestFirst) (byName[ph.name || ''] ??= []).push(ph);
+  const { '': unnamed, ...named } = byName;
+  const plants = Object.keys(named).sort((a, b) => named[b].at(-1)!.id - named[a].at(-1)!.id); // most recently photographed first
   const w = world(d.days, today, d.photos.length, d.settings.veloLimit), won = boss(d.days, today).dead;
   const hue = 25 + w.health * 115; // dusty brown → lush green
   const status = w.health > 0.75 ? 'Thriving 🌍' : w.health > 0.45 ? 'Growing 🌱' : w.health > 0.15 ? 'Dusty 🏜️' : 'Barren — tick some boxes 🪨';
@@ -345,12 +351,14 @@ function World(p: P & { level: number }) {
     </svg>
     <button className="plant-btn" onClick={() => pick.current!.click()}>📸 Plant a tree <small>add a garden photo</small></button>
     <input ref={pick} type="file" accept="image/*" capture="environment" hidden
-      onChange={e => { const f = e.target.files?.[0]; if (f) addPhoto(p, f); e.target.value = ''; }} />
+      onChange={e => { const f = e.target.files?.[0]; if (f) setSnapped(f); e.target.value = ''; }} />
     {oldestFirst.length > 0 && <div className="reels">
-      <button onClick={() => setFilm(oldestFirst)}>▶ Watch it grow ({oldestFirst.length})</button>
-      {reels.map(([n, l]) => <button key={n} onClick={() => setFilm(l)}>🌿 {n} ({l.length})</button>)}
+      {plants.map(n => <button key={n} onClick={() => setFilm(named[n])}>🌿 {n} ({named[n].length})</button>)}
+      {unnamed && <button onClick={() => setFilm(unnamed)}>🌱 Unnamed ({unnamed.length})</button>}
     </div>}
     {film && <Flipbook photos={film} act={p.act} onClose={() => setFilm(null)} />}
+    {snapped && <NamePlant file={snapped} plants={plants} onClose={() => setSnapped(null)}
+      onSave={name => { addPhoto(p, snapped, name); setSnapped(null); }} />}
     <p className="mute legend-line">
       🌙 {w.moons} = streak · 🌳 {w.trees} = photos{w.satellites ? ` · 🛰️ ${w.satellites} = skills` : ''}{lights.length ? ` · 🏙️ ${lights.length} lights = level` : ''}{w.smog ? ' · 💨 smog = over Velo limit' : ''}{won ? ' · 💍 = boss beaten' : ''}
     </p>
@@ -385,7 +393,7 @@ function CravingSOS({ onClose, onWin }: { onClose: () => void; onWin: () => void
   const [left, setLeft] = useState(TOTAL);
   useEffect(() => { const t = setInterval(() => setLeft(l => Math.max(0, l - 1)), 1000); return () => clearInterval(t); }, []);
   const breathingIn = Math.floor((TOTAL - left) / 4) % 2 === 0; // matches the orb's 8s in/out cycle
-  return <div className="overlay" role="dialog" aria-label="Craving timer">
+  return toBody(<div className="overlay" role="dialog" aria-label="Craving timer">
     <div className="sos">
       <div className="orb" aria-hidden="true" />
       <p className="phase">{left ? (breathingIn ? 'Breathe in…' : 'Breathe out…') : 'You did it.'}</p>
@@ -396,7 +404,7 @@ function CravingSOS({ onClose, onWin }: { onClose: () => void; onWin: () => void
         <button onClick={onClose}>Close</button>
       </div>
     </div>
-  </div>;
+  </div>);
 }
 
 function Hunt(p: P) {
@@ -560,6 +568,29 @@ function Roadmap(p: P) {
   </Card>;
 }
 
+/** After a photo: name it — type a new name or tap an existing plant (same name = its own growth timelapse). */
+function NamePlant({ file, plants, onSave, onClose }: { file: File; plants: string[]; onSave: (name: string) => void; onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [preview] = useState(() => URL.createObjectURL(file));
+  useEffect(() => () => URL.revokeObjectURL(preview), [preview]);
+  return toBody(<div className="overlay" role="dialog" aria-label="Name this plant">
+    <form className="card namer" onSubmit={e => { e.preventDefault(); onSave(name); }}>
+      <img src={preview} alt="Your new plant photo" />
+      <h2>🌱 Name this plant</h2>
+      {plants.length > 0 && <div className="reels">
+        {plants.map(n => <button type="button" key={n} onClick={() => onSave(n)}>🌿 {n}</button>)}
+      </div>}
+      <input value={name} onChange={e => setName(e.target.value)} placeholder={plants.length ? 'or a new plant — e.g. Money plant' : 'e.g. Tulsi, Money plant, Rose'}
+        aria-label="Plant name" maxLength={80} enterKeyHint="done" />
+      <div className="namer-actions">
+        <button type="button" onClick={onClose}>Cancel</button>
+        <button type="button" onClick={() => onSave('')}>Skip name</button>
+        <button className="primary" disabled={!name.trim()}>Save 🌳</button>
+      </div>
+    </form>
+  </div>);
+}
+
 /** Plays photos oldest → newest like a flipbook; the photo on screen can be deleted. */
 function Flipbook({ photos, onClose, act }: { photos: Item[]; onClose: () => void; act: Act }) {
   const [i, setI] = useState(0);
@@ -570,7 +601,7 @@ function Flipbook({ photos, onClose, act }: { photos: Item[]; onClose: () => voi
     return () => { clearInterval(t); removeEventListener('keydown', k); };
   }, [photos, onClose]);
   const ph = photos[i];
-  return <div className="overlay" onClick={onClose} role="dialog" aria-label="Garden timelapse">
+  return toBody(<div className="overlay" onClick={onClose} role="dialog" aria-label="Garden timelapse">
     <figure className="film">
       <img src={photoUrl(ph)} alt={ph.name || 'Garden photo'} />
       <figcaption>{ph.name || 'Garden'} · {ph.date} <span className="mute">· {i + 1}/{photos.length} · tap to close</span></figcaption>
@@ -580,7 +611,7 @@ function Flipbook({ photos, onClose, act }: { photos: Item[]; onClose: () => voi
         if (confirm('Delete this photo?')) { onClose(); act(() => api(`/photos/${ph.id}`, 'DELETE'), '🗑 Photo deleted'); }
       }}>🗑 Delete this photo</button>
     </figure>
-  </div>;
+  </div>);
 }
 
 /** Stories-style weekly recap: tap right/left to move, auto-advances. */
