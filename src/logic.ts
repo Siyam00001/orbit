@@ -139,6 +139,34 @@ export const ROADMAP = [
     ['async', 'Async communication', 'Clear updates and Loom videos — remote teams hire for this.', 'async communication remote developer'],
     ['interviews', 'Remote interview prep', 'Take-homes, live coding, and talking about past work.', 'remote developer interview preparation'],
   ] },
+  { track: '🧠 AI system design', skills: [
+    ['llmarch', 'LLM app architecture', 'Where the model sits: API layer, prompts, tools, storage — the big picture.', 'LLM application architecture explained'],
+    ['ragdesign', 'Designing a RAG pipeline', 'Chunking, embedding, retrieval, re-ranking — and where it breaks.', 'RAG pipeline design chunking reranking'],
+    ['aicost', 'Cost & caching', 'Prompt caching, batching and cheaper models — keep the bill sane.', 'LLM cost optimization prompt caching batching'],
+    ['ailatency', 'Latency & streaming at scale', 'Make AI feel fast: streaming, parallel calls, timeouts.', 'reduce LLM latency streaming production'],
+    ['aiqueues', 'Queues & background AI jobs', 'Long generations belong in a queue — you already built one.', 'background job queue for AI tasks architecture'],
+    ['fallbacks', 'Model routing & fallbacks', 'Route easy tasks to cheap models; survive provider outages.', 'LLM model routing fallback strategy'],
+    ['aiobs', 'Observability for AI apps', 'Log prompts, costs and failures so you can debug real users.', 'LLM observability tracing logging'],
+  ] },
+  { track: '🎨 UI / UX', skills: [
+    ['uxbasics', 'UX fundamentals', 'Who the user is, what they need, the shortest path to it.', 'UX design fundamentals for developers'],
+    ['hierarchy', 'Visual hierarchy & spacing', 'Size, contrast and whitespace decide what people see first.', 'visual hierarchy spacing UI design tips'],
+    ['typecolor', 'Typography & color', 'Two fonts, a tight palette, enough contrast — instant polish.', 'typography and color for UI design'],
+    ['figma', 'Figma basics', 'Sketch a screen before coding it — and speak designers\' language.', 'Figma tutorial for beginners developers'],
+    ['mobileux', 'Mobile UX patterns', 'Thumb zones, bottom bars, big tap targets — like Orbit\'s dock.', 'mobile UX design patterns thumb zone'],
+    ['a11y', 'Accessibility', 'Contrast, labels, keyboard use — more users, fewer lawsuits.', 'web accessibility basics WCAG developers'],
+    ['designsys', 'Design systems (Tailwind + shadcn)', 'Reusable components so every screen looks consistent.', 'design system Tailwind shadcn ui tutorial'],
+  ] },
+  { track: '🎯 Interview cracking', skills: [
+    ['dsaarrays', 'Arrays & hash maps', 'The pattern behind half of all coding questions.', 'arrays hash maps interview patterns'],
+    ['twoptr', 'Two pointers & sliding window', 'Turn O(n²) brute force into O(n) — interviewers love it.', 'two pointers sliding window interview problems'],
+    ['treesgraphs', 'Trees & graphs (BFS/DFS)', 'Traversals show up constantly — learn them once, properly.', 'trees graphs BFS DFS interview'],
+    ['dpbasics', 'Dynamic programming basics', 'Break problems into overlapping subproblems — just the basics.', 'dynamic programming for beginners interview'],
+    ['jsreact', 'JS & React interview questions', 'Closures, event loop, hooks, rendering — your daily tools, explained.', 'JavaScript React interview questions'],
+    ['sdinterview', 'System design interview framework', 'Requirements → API → data → scale: a calm 45-minute script.', 'system design interview framework step by step'],
+    ['star', 'Behavioral answers (STAR)', 'Turn Nvgen and imgnfn into crisp stories that land offers.', 'STAR method behavioral interview examples software'],
+    ['negotiate', 'Salary negotiation', 'Remote roles pay in dollars — don\'t undersell yourself.', 'salary negotiation tips software developer remote'],
+  ] },
 ] as const;
 export const SKILLS = ROADMAP.flatMap(t => t.skills.map(([id, title, why, q]) => ({ id, title, why, q, track: t.track })));
 
