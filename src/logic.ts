@@ -121,6 +121,18 @@ export const ROADMAP = [
     ['evals', 'Evals — testing AI output', 'Prove your AI feature works before a client finds out it doesn\'t.', 'LLM evals testing tutorial'],
     ['guardrails', 'Prompt injection & guardrails', 'Stop user input from hijacking your AI.', 'prompt injection guardrails LLM security'],
   ] },
+  // from 18 real remote Indeed posts (Oct 2026): what they ask for that the other tracks don't cover, in their wording
+  { track: '📈 What remote jobs want', skills: [
+    ['pyfastapi', 'Python & FastAPI for AI', '"Fluent Python… async programming… FastAPI" (8 of 18 remote posts).', 'FastAPI async tutorial LLM backend'],
+    ['clouddeploy', 'Deploying to AWS / GCP', '"Deploying and managing applications on AWS" (10 of 18 posts ask for cloud).', 'deploy Node app AWS ECS RDS S3 tutorial'],
+    ['aicoding', 'Shipping with AI coding agents', '"Proficiency with AI coding agents (Cursor, Claude Code, Codex)" (7 posts).', 'Claude Code Cursor workflow professional developers'],
+    ['agentframeworks', 'LangGraph & agent frameworks', '"LLM calls tools or APIs and takes action on its own… not a chatbot wrapper."', 'LangGraph tutorial build agent'],
+    ['agentmemory', 'Agent context & memory', '"Agent design, skills, context, and memory."', 'context engineering LLM agents memory'],
+    ['hitl', 'Human in the loop & handoff', '"Know when to act, ask a question, or hand off to a human."', 'human in the loop AI agent approval pattern'],
+    ['tenantauth', 'Multi tenant auth & RBAC', '"Permission aware APIs" and "tenant isolation" (5 posts).', 'multi-tenant SaaS RBAC row level security Postgres'],
+    ['webhooks', 'Webhooks & event driven flows', '"Event driven workflows… API/webhook integrations."', 'webhooks event-driven architecture tutorial'],
+    ['terraform', 'Infrastructure as code', '"Deploying resources via Terraform" (3 posts).', 'Terraform beginner tutorial AWS'],
+  ] },
   { track: '🚀 Ship like a senior', skills: [
     ['ts', 'Advanced TypeScript', 'Generics and utility types — reads senior in any codebase.', 'advanced TypeScript generics utility types'],
     ['postgres', 'Postgres & SQL', 'Most jobs use it; Firestore alone limits you.', 'PostgreSQL SQL tutorial for developers'],
