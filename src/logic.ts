@@ -30,6 +30,28 @@ export function mergePatch(target: unknown, patch: unknown): any {
   return out;
 }
 
+// ── sync granularity: one key per day field (each habit separately), per setting and per item,
+//    so edits made on two devices to different things never overwrite each other ──
+export const parseKey = (k: string) => { const [type, a, b] = k.split('|'); return { type, a, b }; };
+export function dayPatchKeys(date: string, patch: Record<string, unknown>) {
+  const keys: string[] = [];
+  for (const [f, v] of Object.entries(patch)) {
+    if (f === 'habits' && isObj(v)) for (const h of Object.keys(v)) keys.push(`d|${date}|h.${h}`);
+    else keys.push(`d|${date}|${f}`);
+  }
+  return keys;
+}
+export const dayField = (d: Day | undefined, field: string): unknown =>
+  (field.startsWith('h.') ? d?.habits?.[field.slice(2)] : (d as Record<string, unknown> | undefined)?.[field]) ?? null;
+/** Set (or delete, for null) one field of a day; never mutates the input. */
+export function setDayField(d: Day, field: string, v: unknown): Day {
+  const out: Record<string, any> = { ...d, habits: { ...d.habits } };
+  if (field.startsWith('h.')) { if (v == null) delete out.habits[field.slice(2)]; else out.habits[field.slice(2)] = v; }
+  else if (v == null) delete out[field]; else out[field] = v;
+  if (!Object.keys(out.habits).length) delete out.habits;
+  return out as Day;
+}
+
 export const doneCount = (d?: Day) => HABITS.filter(([id]) => d?.habits?.[id]).length;
 const perfect = (d?: Day) => doneCount(d) === HABITS.length;
 

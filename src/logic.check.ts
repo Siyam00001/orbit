@@ -1,6 +1,6 @@
 // npm run check — fails loudly if the date/money/streak math breaks
 import assert from 'node:assert/strict';
-import { HABITS, QUESTS, SKILLS, learned, nextSkill, addDays, mergePatch, boss, bossesBeaten, dayXp, daysBetween, money, questFor, streak, weekTotal, world, wrapped, xp } from './logic.ts';
+import { HABITS, QUESTS, SKILLS, learned, nextSkill, addDays, mergePatch, dayPatchKeys, parseKey, setDayField, dayField, boss, bossesBeaten, dayXp, daysBetween, money, questFor, streak, weekTotal, world, wrapped, xp } from './logic.ts';
 
 assert.equal(addDays('2026-03-31', 1), '2026-04-01');
 assert.equal(daysBetween('2026-10-01', '2026-10-04'), 3);
@@ -53,6 +53,14 @@ assert.equal(nextSkill(sk)?.id, 'embeddings');
 assert.equal(nextSkill({ x: { skills: SKILLS.map(s => s.id) } }), null, 'roadmap complete');
 assert.equal(dayXp({ skills: ['a', 'b'] }), 80);
 assert.equal(world(sk, '2026-10-10', 0, 8).satellites, 3);
+
+assert.deepEqual(dayPatchKeys('2026-10-15', { habits: { move: true, dms: false }, velo: 3 }), ['d|2026-10-15|h.move', 'd|2026-10-15|h.dms', 'd|2026-10-15|velo']);
+assert.deepEqual(parseKey('d|2026-10-15|h.move'), { type: 'd', a: '2026-10-15', b: 'h.move' });
+const dd = setDayField(setDayField({ velo: 2 }, 'h.move', true), 'velo', null);
+assert.deepEqual(dd, { habits: { move: true } }, 'set habit, delete counter');
+assert.equal(dayField(dd, 'h.move'), true);
+assert.equal(dayField(setDayField(dd, 'h.dms', false), 'h.dms'), false, 'unticked stays false, not deleted');
+assert.deepEqual(setDayField(dd, 'h.move', null), {}, 'last habit removed drops habits');
 
 assert.equal(xp({}, 0).level, 1);
 assert.equal(xp({ '2026-10-10': { ...all, replies: 15 } }, 0).level, 2); // 60 + 150 = 210 XP

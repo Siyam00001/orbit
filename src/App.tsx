@@ -5,6 +5,7 @@ import {
   type Count, type Day, type Item, type Settings,
 } from './logic.ts';
 import { LOCAL, api, photoUrl, shrink } from './api.ts';
+import { disableSync, enableSync, joinSync, syncNow, syncStatus, type SyncStatus } from './sync.ts';
 
 type Weather = { city: string; temp: number; code: number; rain: number; hi: number; lo: number };
 type Data = { photos: Item[]; capsules: Item[]; days: Record<string, Day>; settings: Settings };
@@ -114,6 +115,8 @@ export default function App() {
   const [loadErr, setLoadErr] = useState('');
   const start = () => { setLoadErr(''); load().catch((e: Error) => setLoadErr(e?.message || String(e))); };
   useEffect(() => { start(); loadWeather(); }, [load]);
+  // another device's changes just arrived: redraw with them
+  useEffect(() => { const h = () => { load().catch(() => {}); }; addEventListener('orbit:synced', h); return () => removeEventListener('orbit:synced', h); }, [load]);
 
   // level-up fanfare when XP crosses a threshold (not on first load)
   useEffect(() => {
@@ -679,11 +682,40 @@ function SettingsPanel({ s, act, onSaved }: { s: Settings; act: Act; onSaved: ()
     <label>Velo daily limit<input name="veloLimit" type="number" min="0" defaultValue={s.veloLimit} /></label>
     <button className="primary">Save</button>
     <ThemePicker />
+    {LOCAL && <SyncPanel act={act} />}
     {LOCAL && <Backup act={act} />}
   </form>;
 }
 
 /** Phone app only: data lives on the device, so give it a way off the device. */
+/** Phone/web app: keep every device in step through one shared sync code. */
+function SyncPanel({ act }: { act: Act }) {
+  const [st, setSt] = useState<SyncStatus | null>(null);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const refresh = () => syncStatus().then(setSt);
+  useEffect(() => { refresh(); const t = setInterval(refresh, 5000); return () => clearInterval(t); }, []);
+  const run = (fn: () => Promise<unknown>, msg: string) => { setBusy(true); act(fn, msg).finally(() => { setBusy(false); refresh(); }); };
+  const ago = (t?: number) => !t ? 'not yet' : Date.now() - t < 60e3 ? 'just now' : `${Math.round((Date.now() - t) / 60e3)} min ago`;
+  if (!st) return null;
+  return <div className="backup sync">
+    <b>☁️ Sync between your devices</b>
+    {st.on
+      ? <>
+          <span className="mute">{st.error ? `⚠️ ${st.error}` : `✅ Synced ${ago(st.last)}`}</span>
+          <button type="button" disabled={busy} onClick={() => run(() => syncNow(), 'Synced')}>🔄 Sync now</button>
+          <button type="button" onClick={() => navigator.clipboard?.writeText(st.code!).then(() => act(async () => {}, '📋 Sync code copied — paste it on your other device'), () => prompt('Copy this sync code:', st.code))}>📋 Copy sync code</button>
+          <button type="button" className="link" onClick={() => confirm('Stop syncing on this device? Your data here stays.') && run(disableSync, 'Sync turned off on this device')}>Turn off</button>
+        </>
+      : <>
+          <span className="mute">First device: turn it on, then copy the code into your other device below.</span>
+          <button type="button" className="primary" disabled={busy} onClick={() => run(enableSync, '☁️ Sync is on — now copy the code to your other device')}>☁️ Turn on sync</button>
+          <input value={code} onChange={e => setCode(e.target.value)} placeholder="…or paste a sync code from your other device" aria-label="Sync code" />
+          <button type="button" disabled={busy || code.trim().length < 32} onClick={() => run(() => joinSync(code), '🔗 Connected — your devices are merged')}>🔗 Join</button>
+        </>}
+  </div>;
+}
+
 function Backup({ act }: { act: Act }) {
   const pick = useRef<HTMLInputElement>(null);
   const save = async () => {

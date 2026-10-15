@@ -360,6 +360,8 @@ a.btn:hover { border-color: var(--acc); }
 /* backup (phone app) */
 .backup { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
 .backup span { flex: 1 1 220px; font-size: 13px; }
+.sync b { flex-basis: 100%; }
+.sync input { flex: 1 1 220px; min-width: 0; min-height: 40px; }
 
 /* phones: notch/home-bar safe areas, thumb-sized targets, no keyboard hints */
 #root { padding-top: max(28px, env(safe-area-inset-top)); padding-bottom: max(80px, env(safe-area-inset-bottom)); }

@@ -31,4 +31,5 @@ if (LOCAL) {
   // phone app: work offline, and ask the browser not to evict on-device data under storage pressure
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
   navigator.storage?.persist?.();
+  import('./sync.ts').then(s => s.startAutoSync()); // no-op until sync is turned on in ⚙️
 }

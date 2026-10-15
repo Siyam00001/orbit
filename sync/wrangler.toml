@@ -1,0 +1,8 @@
+name = "orbit-sync"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "orbit-sync"
+database_id = "bde83c71-62f2-47a8-9283-16b213ef464f"
